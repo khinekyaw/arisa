@@ -2,30 +2,34 @@ import { VRM, VRMExpressionPresetName } from "@pixiv/three-vrm"
 import { useFrame } from "@react-three/fiber"
 import { useEffect, useRef } from "react"
 import { lerp } from "three/src/math/MathUtils.js"
+import { Lipsync, VISEMES } from "wawa-lipsync"
 import { useAvatarStore } from "../store/avatarStore"
 
-const VISEME_TO_VRM: Record<string, VRMExpressionPresetName | null> = {
-  A: VRMExpressionPresetName.Aa,
-  B: VRMExpressionPresetName.Aa,
-  C: VRMExpressionPresetName.Ih,
-  D: VRMExpressionPresetName.Ee,
-  E: VRMExpressionPresetName.Ee,
-  F: VRMExpressionPresetName.Oh,
-  G: VRMExpressionPresetName.Oh,
-  H: VRMExpressionPresetName.Aa,
-  X: null,
-}
+const lipsyncManager = new Lipsync()
 
-const VISEME_WEIGHT: Record<string, number> = {
-  A: 1.0,
-  B: 0.35,
-  C: 0.6,
-  D: 0.7,
-  E: 0.5,
-  F: 0.7,
-  G: 0.8,
-  H: 0.4,
-  X: 0,
+const VISEME_TO_VRM: Partial<Record<VISEMES, VRMExpressionPresetName>> = {
+  // Silence / closed mouth
+  [VISEMES.sil]: undefined, // no expression = closed
+
+  // Bilabial / labial (P, B, M, F, V) → slight open or neutral
+  [VISEMES.PP]: undefined, // lips together, use closed
+  [VISEMES.FF]: undefined, // teeth on lip, near closed
+
+  // Dental / interdental (TH, T, D, N, L, S, Z, CH, SH)
+  [VISEMES.TH]: VRMExpressionPresetName.Ih, // tongue tip visible, "ih"
+  [VISEMES.DD]: VRMExpressionPresetName.Ih,
+  [VISEMES.kk]: VRMExpressionPresetName.Ih,
+  [VISEMES.CH]: VRMExpressionPresetName.Ih,
+  [VISEMES.SS]: VRMExpressionPresetName.Ih,
+  [VISEMES.nn]: VRMExpressionPresetName.Ih,
+  [VISEMES.RR]: VRMExpressionPresetName.Ih,
+
+  // Vowels — direct mapping
+  [VISEMES.aa]: VRMExpressionPresetName.Aa, // "father"
+  [VISEMES.E]: VRMExpressionPresetName.Ee, // "bed"
+  [VISEMES.I]: VRMExpressionPresetName.Ih, // "bit"
+  [VISEMES.O]: VRMExpressionPresetName.Oh, // "go"
+  [VISEMES.U]: VRMExpressionPresetName.Ou, // "food"
 }
 
 const ALL_LIP_EXPRESSIONS = [
@@ -36,14 +40,15 @@ const ALL_LIP_EXPRESSIONS = [
   VRMExpressionPresetName.Oh,
 ] as const
 
-export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 12) {
+export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const avatarState = useAvatarStore((s) => s.values)
+  const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
   const setAudioPlaying = useAvatarStore((s) => s.setAudioPlaying)
 
   // Whenever store gets a new speech payload, play it
   useEffect(() => {
-    if (!avatarState) return
+    if (!avatarState?.audio_base64) return
 
     audioRef.current?.pause()
     const audio = new Audio(
@@ -51,6 +56,8 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 12) {
     )
     audioRef.current = audio
     audio.play()
+
+    lipsyncManager.connectAudio(audio)
 
     audio.addEventListener("play", () => setAudioPlaying(true))
     audio.addEventListener("ended", () => setAudioPlaying(false))
@@ -61,6 +68,27 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 12) {
     }
   }, [avatarState])
 
+  useFrame((_, delta) => {
+    const mgr = vrm?.expressionManager
+    if (!mgr) return
+    let viseme = null
+
+    // Reset all mouth shapes
+    if (isAudioPlaying) {
+      lipsyncManager.processAudio()
+      viseme = lipsyncManager.viseme
+      // console.log("viseme:", viseme)
+    }
+    for (const expr of ALL_LIP_EXPRESSIONS) {
+      const current = mgr.getValue(expr) ?? 0
+      const target = viseme ? VISEME_TO_VRM[viseme] : null
+      mgr.setValue(
+        expr,
+        lerp(current, target === expr ? 1 : 0, delta * lerpSpeed),
+      )
+    }
+  })
+
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -68,34 +96,4 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 12) {
       audioRef.current = null
     }
   }, [])
-
-  useFrame((_, delta) => {
-    const mgr = vrm?.expressionManager
-    if (!mgr) return
-
-    const audio = audioRef.current
-    const cues = avatarState?.visemes.mouthCues ?? []
-    const t = audio && !audio.paused ? audio.currentTime : null
-
-    const activeCue =
-      t !== null ? (cues.find((c) => t >= c.start && t < c.end) ?? null) : null
-    const targetExpression = activeCue
-      ? (VISEME_TO_VRM[activeCue.value] ?? null)
-      : null
-    const targetWeight = activeCue ? (VISEME_WEIGHT[activeCue.value] ?? 0) : 0
-
-    for (const expr of ALL_LIP_EXPRESSIONS) {
-      const current = mgr.getValue(expr) ?? 0
-      mgr.setValue(
-        expr,
-        lerp(
-          current,
-          targetExpression === expr ? targetWeight : 0,
-          delta * lerpSpeed,
-        ),
-      )
-    }
-
-    // mgr.update()
-  })
 }

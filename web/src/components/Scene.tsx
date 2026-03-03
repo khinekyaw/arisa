@@ -1,15 +1,15 @@
 import { CameraControls, ContactShadows, Environment } from "@react-three/drei"
-import { Canvas } from "@react-three/fiber"
 import { Bloom, EffectComposer } from "@react-three/postprocessing"
 import { useRef } from "react"
-import Avatar from "./Avatar"
 // import * as THREE from "three"
+
+import Avatar from "./Avatar"
 
 function Scene() {
   const controls = useRef<CameraControls>(null)
 
   return (
-    <Canvas shadows camera={{ position: [0, 0.1, 2], fov: 30 }}>
+    <>
       {/* Controls */}
       <CameraControls
         ref={controls}
@@ -38,13 +38,12 @@ function Scene() {
       {/* Avatar */}
       <group position={[0, -1.15, 0]}>
         <Avatar
-          path="models/avatar.glb"
-          position={[0, 0, 0]}
-          rotation={[0, Math.PI, 0]}
+          path="models/maid.glb"
+          // rotation={[0, Math.PI, 0]}
         />
         <ContactShadows position={[0, 0, 0]} opacity={0.5} />
       </group>
-    </Canvas>
+    </>
   )
 }
 

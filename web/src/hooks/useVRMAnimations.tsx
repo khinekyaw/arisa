@@ -7,10 +7,12 @@ import { useAvatarStore } from "@/store/avatarStore"
 import { AnimationAction, AnimationMixer, LoopOnce, type Event } from "three"
 import { remapMixamoAnimationToVrm } from "../utils/remapMixamoAnimationToVrm"
 
+const IS_DEBUG = import.meta.env.VITE_DEBUG === 'true'
+
 const ANIMATIONS = [
-  { name: "idle", path: "/animations/idle.fbx" },
-  { name: "happy_idle", path: "/animations/happy_idle.fbx" },
-  { name: "fighting_idle", path: "/animations/fighting_idle.fbx" },
+  { name: "idle", path: "/animations/idle_2.fbx" },
+  { name: "idle_1", path: "/animations/idle.fbx" },
+  { name: "happy", path: "/animations/happy.fbx" },
   { name: "talk", path: "/animations/talking.fbx" },
   { name: "think", path: "/animations/thinking.fbx" },
   { name: "wave", path: "/animations/waving.fbx" },
@@ -26,7 +28,7 @@ type AnimationName = (typeof ANIMATIONS)[number]["name"]
 function useAllFBX() {
   const idle = useFBX(ANIMATIONS[0].path)
   const hidl = useFBX(ANIMATIONS[1].path)
-  const fidl = useFBX(ANIMATIONS[2].path)
+  const happy = useFBX(ANIMATIONS[2].path)
   const talk = useFBX(ANIMATIONS[3].path)
   const think = useFBX(ANIMATIONS[4].path)
   const wave = useFBX(ANIMATIONS[5].path)
@@ -39,7 +41,7 @@ function useAllFBX() {
     () => [
       idle,
       hidl,
-      fidl,
+      happy,
       talk,
       think,
       wave,
@@ -49,7 +51,7 @@ function useAllFBX() {
       thank,
       greet,
     ],
-    [idle, hidl, fidl, talk, think, wave, aug, dance, talk1, thank, greet],
+    [idle, hidl, happy, talk, think, wave, aug, dance, talk1, thank, greet],
   )
 }
 
@@ -68,15 +70,19 @@ export function useVRMAnimations(vrm: VRM) {
 
   const { actions } = useAnimations(animationClips, vrm.scene)
 
-  const { animation } = useControls("VRM", {
-    animation: {
-      options: ["None", ...ANIMATIONS.map((a) => a.name)] as [
-        "None",
-        ...AnimationName[],
-      ],
-      value: "idle" as "None" | AnimationName,
+  const { animation } = useControls(
+    "VRM",
+    {
+      animation: {
+        options: ["None", ...ANIMATIONS.map((a) => a.name)] as [
+          "None",
+          ...AnimationName[],
+        ],
+        value: "idle" as "None" | AnimationName,
+      },
     },
-  })
+    { render: () => IS_DEBUG },
+  )
 
   const avatarState = useAvatarStore((s) => s.values)
   const setAnimationPlaying = useAvatarStore((s) => s.setAnimationPlaying)

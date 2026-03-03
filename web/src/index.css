@@ -8,8 +8,7 @@
 
 body {
   margin: 0;
-  background-color: #b7a9d9;
-  background-image: linear-gradient(19deg, #dab5ef 0%, #e5dffb 100%);
+  background-image: linear-gradient(0deg, #210e33 0%, #212137 100%);
 }
 
 @import "tailwindcss";

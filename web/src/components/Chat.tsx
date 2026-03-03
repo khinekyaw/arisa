@@ -1,14 +1,17 @@
-import { cn } from "@/lib/utils"
 import axios from "axios"
 import { Disc, Mic, Send } from "lucide-react"
 import React, { useEffect, useState } from "react"
 import { useAudioRecorder } from "../hooks/useAudioRecorder"
 import { useAvatarStore } from "../store/avatarStore"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
 
 const api = axios.create({
   baseURL: "http://localhost:3001/api/",
   timeout: 50000,
 })
+
+const chatApiPath = "/chat"
 
 interface ChatResponse {
   audio_base64: string
@@ -50,7 +53,7 @@ const Chat: React.FC = () => {
     setMessages((prev) => [...prev, { message: text, fromUser: true }])
     setInput("")
 
-    const response = await api.post<ChatResponse>("/chat/test", { text })
+    const response = await api.post<ChatResponse>(chatApiPath, { text })
     if (response.data) handleResponse(response.data)
   }
 
@@ -62,49 +65,45 @@ const Chat: React.FC = () => {
     clearRecording()
 
     const fetchChat = async () => {
-      const response = await api.post<ChatResponse>("/chat/test", formData)
+      const response = await api.post<ChatResponse>(chatApiPath, formData)
       if (response.data) handleResponse(response.data)
     }
 
     fetchChat()
   }, [audioBlob])
 
+  const msgLen = messages?.length || 0
+
   return (
-    <div className="fixed bottom-5 w-125 -translate-x-1/2 left-1/2 text-sm">
-      <div className="rounded-xl bg-black/10 backdrop-blur-sm py-2 px-3 shadow text-white/80">
-        <div className="h-12 overflow-scroll no-scrollbar">
-          <ul className="flex flex-col gap-1">
-            {messages.map((msg, index) => (
-              <li key={index} className={msg.fromUser ? "text-right" : ""}>
-                {msg.message}
-              </li>
-            ))}
-          </ul>
-        </div>
+    <div className="fixed bottom-6 w-125 z-50 -translate-x-1/2 left-1/2 text-sm">
+      <div>
+        <ul className="flex flex-col gap-1 text-white">
+          {messages?.slice(msgLen - 1).map((msg, index) => (
+            <li
+              key={index}
+              className="bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit text-sm transition animate-in"
+            >
+              {msg.message}
+            </li>
+          ))}
+        </ul>
         <div className="flex gap-2 mt-2">
           <form onSubmit={sendMessage} className="flex gap-2 flex-1">
-            <input
+            <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a message"
-              className="flex-1 border-0 ring-0 outline-0"
+              placeholder="Ask Anything"
             />
-            <button
-              type="submit"
-              className="h-10 w-10 rounded-full border border-black/10 [&_svg]:w-4 [&_svg]:h-4 flex items-center justify-center transition hover:bg-black/5"
-            >
+            <Button type="submit" className="w-14">
               <Send />
-            </button>
+            </Button>
           </form>
-          <button
-            className={cn(
-              "h-10 w-10 rounded-full border border-black/10 [&_svg]:w-4 [&_svg]:h-4 flex items-center justify-center transition hover:bg-black/5",
-              isRecording && "bg-red-500/10 hover:bg-red-500/15",
-            )}
+          <Button
+            className="w-14"
             onClick={() => (isRecording ? stopRecording() : startRecording())}
           >
             {isRecording ? <Disc /> : <Mic />}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

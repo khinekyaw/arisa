@@ -3,7 +3,7 @@ import { exec } from "child_process"
 import { randomUUID } from "crypto"
 import { Request, Response, Router } from "express"
 import FormData from "form-data"
-import { readFile, unlink, writeFile } from "fs/promises"
+import { readFile, unlink } from "fs/promises"
 import multer from "multer"
 import { promisify } from "util"
 import { data } from "../mock/data"
@@ -117,7 +117,7 @@ async function askGrok(
 At the end of every response, append a JSON block (and nothing after it) in this exact format:
 <avatar>
 {
-  "animation": "<one of: idle, happy_idle, fighting_idle, greet, talk, think, wave, arguing, dance, talk_1, thank>",
+  "animation": "<one of: idle, idle_1, happy, fighting_idle, greet, talk, talk_1, think, wave, arguing, dance, thank>",
   "expression": {
     "happy": <0.0–1.0>,
     "sad": <0.0–1.0>,
@@ -130,7 +130,7 @@ At the end of every response, append a JSON block (and nothing after it) in this
 
 Pick the animation and expression values that best match the emotional tone of your response.
 For a normal answer use "talk" or "talk_1". For greetings use "wave" or "greet". For thanks use "thank". 
-For excited/positive news use "happy_idle". For confused/thinking use "think". For dancing/fun use "dance".
+For excited/positive news use "happy". For confused/thinking use "think". For dancing/fun use "dance".
 Expression values should sum to no more than 1.0 and reflect the mood naturally.`,
         },
         ...history,
@@ -233,10 +233,8 @@ router.post(
       let transcript: string
 
       if (textInput) {
-        // Text mode — skip STT
         transcript = textInput
       } else {
-        // Audio mode — run STT
         const mimeType = req.file!.mimetype || "audio/webm"
         const audioFileBuffer = await readFile(req.file!.path)
         transcript = await speechToText(audioFileBuffer, mimeType)
@@ -247,22 +245,9 @@ router.post(
         sessionId,
       )
 
-      // Save to history (store raw assistant message without <avatar> block)
       appendHistory(sessionId, transcript, llmResponse)
 
       const audioBuffer = await textToSpeech(llmResponse)
-
-      // Write TTS audio buffer to temp file for rhubarb
-      const fileName = randomUUID()
-      const tmpMp3Path = `/tmp/${fileName}_tts.webm`
-      const tmpWavPath = `/tmp/${fileName}_tts.wav`
-      await writeFile(tmpMp3Path, audioBuffer)
-
-      // Convert MP3 to WAV for rhubarb
-      await execAsync(`ffmpeg -i "${tmpMp3Path}" "${tmpWavPath}"`)
-      await unlink(tmpMp3Path)
-
-      const visemes = await getVisemesFromAudio(tmpWavPath)
 
       res.json({
         session_id: sessionId,
@@ -270,7 +255,6 @@ router.post(
         message: llmResponse,
         audio_base64: audioBuffer.toString("base64"),
         audio_mime: "audio/mpeg",
-        visemes,
         animation: avatar.animation,
         expression: avatar.expression,
       })
