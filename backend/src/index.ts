@@ -1,9 +1,11 @@
 import dotenv from "dotenv"
 import express from "express"
+import http from "http"
 const cors = require("cors")
 dotenv.config()
 
 import voiceRouter from "./routes/voiceRoute"
+import { attachTranscribeSocket } from "./ws/transcribeSocket"
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -30,6 +32,10 @@ app.get("/", (req, res) => {
   })
 })
 
-app.listen(PORT, () => {
+const server = http.createServer(app)
+attachTranscribeSocket(server)
+
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
+  console.log(`Transcription socket on ws://localhost:${PORT}/api/transcribe`)
 })

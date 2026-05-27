@@ -13,12 +13,12 @@ v1/
 │       │   ├── Scene.tsx        Three.js scene setup
 │       │   └── Chat.tsx         Voice/text input UI + API client
 │       ├── hooks/
-│       │   ├── useVRMAnimations.tsx   Mixamo→VRM animation playback
-│       │   ├── useVRMBlink.tsx        Randomised eye blink
-│       │   ├── useVRMExpressions.tsx  Facial expression lerp
-│       │   ├── useVRMLipSync.ts       Real-time lip sync + audio playback
-│       │   ├── useVRMLookAt.tsx       Camera-tracking eye gaze
-│       │   └── useAudioRecorder.ts    Mic recording
+│       │   ├── useVRMAnimations.tsx          Mixamo→VRM animation playback
+│       │   ├── useVRMBlink.tsx               Randomised eye blink
+│       │   ├── useVRMExpressions.tsx         Facial expression lerp
+│       │   ├── useVRMLipSync.ts              Real-time lip sync + audio playback
+│       │   ├── useVRMLookAt.tsx              Camera-tracking eye gaze
+│       │   └── useStreamingTranscription.ts  Live mic → PCM → WS → transcript
 │       ├── store/
 │       │   └── avatarStore.ts    Zustand — central avatar state
 │       └── utils/
@@ -26,9 +26,11 @@ v1/
 │           └── mixamoVRMRigMap.ts
 └── backend/           Express API (port 3001)
     └── src/
-        ├── index.ts             Server entry, CORS, routes
+        ├── index.ts             Server entry, CORS, HTTP + WS server
         ├── routes/
         │   └── voiceRoute.ts    POST /api/chat pipeline
+        ├── ws/
+        │   └── transcribeSocket.ts   WS proxy → ElevenLabs realtime STT
         └── mock/
             └── data.ts          Static test fixture for /api/chat/test
 ```
@@ -57,6 +59,37 @@ Response shape:
   }
 }
 ```
+
+## Live Transcription (WebSocket)
+
+While the user holds a voice turn, the mic is transcribed in real time and shown
+as a live bubble — separate from the `/api/chat` pipeline.
+
+```
+Mic → AudioContext (16kHz PCM) → ws://…/api/transcribe (backend proxy)
+                                      │  adds xi-api-key, forwards
+                                      ▼
+                          ElevenLabs Scribe v2 Realtime
+                                      │
+        partial_transcript ──────────┤  (live, updates the bubble)
+        committed_transcript ────────┘  (final segment)
+```
+
+- **Frontend**: `useStreamingTranscription.ts` captures mic audio via the Web
+  Audio API, converts Float32 → 16-bit PCM, base64-encodes it, and sends
+  `input_audio_chunk` messages. It exposes `start()`, `stop()`, `isListening`,
+  `isConnecting`, and the running `transcript`.
+- **Backend**: `ws/transcribeSocket.ts` is a thin proxy. It opens an upstream WS
+  to ElevenLabs with the `xi-api-key` header (the key never reaches the browser)
+  and pipes messages both ways. Origin is checked against `CLIENT_ORIGIN`.
+- **On stop**: `stop()` sends a final `commit:true` chunk, waits up to 2s for the
+  last `committed_transcript`, then resolves with the full text. `Chat.tsx` sends
+  that text to `POST /api/chat` as the `text` field — skipping the batch STT step
+  entirely (no redundant transcription, lower cost).
+
+The model is `scribe_v2_realtime` (override via `ELEVENLABS_STT_MODEL_ID`).
+Audio is PCM at the AudioContext sample rate (requested 16kHz; the actual rate
+is read back and sent per-chunk, so any supported rate works without resampling).
 
 ## Avatar State (Zustand)
 
@@ -107,8 +140,11 @@ Add a new `router.post(...)` in `backend/src/routes/voiceRoute.ts` or create a n
 - `PORT` — HTTP port (default 3000, dev uses 3001)
 - `ELEVENLABS_API_KEY`
 - `ELEVENLABS_VOICE_ID` — defaults to Bella (`hpp4J3VqNfWAUOO0d1Us`)
+- `ELEVENLABS_STT_MODEL_ID` — realtime STT model (default `scribe_v2_realtime`)
 - `XAI_API_KEY`
+- `CLIENT_ORIGIN` — allowed WS origin (default `http://localhost:5173`)
 
 **Frontend (`web/.env`)**
 - `VITE_API_URL` — backend base URL (default `http://localhost:3001/api/`)
+- `VITE_WS_URL` — transcription socket (default `ws://localhost:3001/api/transcribe`)
 - `VITE_DEBUG` — set `true` to show Leva controls panel

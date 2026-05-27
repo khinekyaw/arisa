@@ -1,7 +1,7 @@
 import axios from "axios"
 import { Disc, Mic, Send } from "lucide-react"
-import React, { useEffect, useState } from "react"
-import { useAudioRecorder } from "../hooks/useAudioRecorder"
+import React, { useState } from "react"
+import { useStreamingTranscription } from "../hooks/useStreamingTranscription"
 import { useAvatarStore } from "../store/avatarStore"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
@@ -32,60 +32,55 @@ const Chat: React.FC = () => {
   >([])
   const [input, setInput] = useState("")
   const setValues = useAvatarStore((s) => s.setValues)
-  const {
-    isRecording,
-    startRecording,
-    stopRecording,
-    audioBlob,
-    clearRecording,
-  } = useAudioRecorder()
+  const { isListening, isConnecting, transcript, start, stop } =
+    useStreamingTranscription()
 
   const handleResponse = (data: ChatResponse) => {
     setMessages((prev) => [...prev, { message: data.message }])
     setValues(data)
   }
 
-  const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!input.trim()) return
-
-    const text = input.trim()
+  const sendText = async (text: string) => {
     setMessages((prev) => [...prev, { message: text, fromUser: true }])
-    setInput("")
-
     const response = await api.post<ChatResponse>(chatApiPath, { text })
     if (response.data) handleResponse(response.data)
   }
 
-  useEffect(() => {
-    if (!audioBlob) return
+  const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const text = input.trim()
+    if (!text) return
+    setInput("")
+    await sendText(text)
+  }
 
-    const formData = new FormData()
-    formData.append("audio", audioBlob, "recording.webm")
-    clearRecording()
-
-    const fetchChat = async () => {
-      const response = await api.post<ChatResponse>(chatApiPath, formData)
-      if (response.data) handleResponse(response.data)
+  const toggleRecording = async () => {
+    if (isListening) {
+      const finalTranscript = await stop()
+      if (finalTranscript) await sendText(finalTranscript)
+    } else {
+      await start()
     }
+  }
 
-    fetchChat()
-  }, [audioBlob])
-
-  const msgLen = messages?.length || 0
+  const lastMessage = messages[messages.length - 1]
+  const liveLabel = transcript || (isConnecting ? "Connecting…" : "Listening…")
 
   return (
     <div className="fixed bottom-6 w-125 z-50 -translate-x-1/2 left-1/2 text-sm">
       <div>
         <ul className="flex flex-col gap-1 text-white">
-          {messages?.slice(msgLen - 1).map((msg, index) => (
-            <li
-              key={index}
-              className="bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit text-sm transition animate-in"
-            >
-              {msg.message}
+          {isListening ? (
+            <li className="bg-white/10 block backdrop-blur-2xl rounded-2xl border-2 border-white/10 px-3 py-1 w-fit text-sm transition animate-in italic opacity-80">
+              {liveLabel}
             </li>
-          ))}
+          ) : (
+            lastMessage && (
+              <li className="bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit text-sm transition animate-in">
+                {lastMessage.message}
+              </li>
+            )
+          )}
         </ul>
         <div className="flex gap-2 mt-2">
           <form onSubmit={sendMessage} className="flex gap-2 flex-1">
@@ -98,11 +93,8 @@ const Chat: React.FC = () => {
               <Send />
             </Button>
           </form>
-          <Button
-            className="w-14"
-            onClick={() => (isRecording ? stopRecording() : startRecording())}
-          >
-            {isRecording ? <Disc /> : <Mic />}
+          <Button className="w-14" onClick={toggleRecording}>
+            {isListening ? <Disc /> : <Mic />}
           </Button>
         </div>
       </div>
