@@ -1,6 +1,6 @@
 import axios from "axios"
 import { Disc, Mic, Send } from "lucide-react"
-import React, { useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import { useStreamingTranscription } from "../hooks/useStreamingTranscription"
 import { useAvatarStore } from "../store/avatarStore"
 import { Button } from "./ui/button"
@@ -12,6 +12,10 @@ const api = axios.create({
 })
 
 const chatApiPath = "chat"
+
+// Fallback: if a reply produces no audio, clear the "thinking" gate after this
+// long so the conversation loop doesn't stall.
+const REPLY_FALLBACK_MS = 3000
 
 interface ChatResponse {
   audio_base64: string
@@ -31,20 +35,55 @@ const Chat: React.FC = () => {
     { message: string; fromUser?: boolean }[]
   >([])
   const [input, setInput] = useState("")
+  // Conversation mode: the mic re-arms itself turn after turn until toggled off.
+  const [convoActive, setConvoActive] = useState(false)
+  // True between sending a turn and the avatar starting to speak.
+  const [pendingReply, setPendingReply] = useState(false)
+
   const setValues = useAvatarStore((s) => s.setValues)
-  const { isListening, isConnecting, transcript, start, stop } =
-    useStreamingTranscription()
+  const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
 
-  const handleResponse = (data: ChatResponse) => {
-    setMessages((prev) => [...prev, { message: data.message }])
-    setValues(data)
-  }
+  const sendText = useCallback(
+    async (text: string) => {
+      setMessages((prev) => [...prev, { message: text, fromUser: true }])
+      setPendingReply(true)
+      try {
+        const response = await api.post<ChatResponse>(chatApiPath, { text })
+        if (response.data) {
+          setMessages((prev) => [...prev, { message: response.data.message }])
+          setValues(response.data)
+        }
+      } finally {
+        // Audio playback normally clears pendingReply; this guards replies
+        // that never produce audio so the loop can continue.
+        window.setTimeout(() => setPendingReply(false), REPLY_FALLBACK_MS)
+      }
+    },
+    [setValues],
+  )
 
-  const sendText = async (text: string) => {
-    setMessages((prev) => [...prev, { message: text, fromUser: true }])
-    const response = await api.post<ChatResponse>(chatApiPath, { text })
-    if (response.data) handleResponse(response.data)
-  }
+  const { phase, isListening, transcript, error, start, cancel } =
+    useStreamingTranscription({ onTurnEnd: sendText })
+
+  // Once the avatar starts speaking, the reply has arrived.
+  useEffect(() => {
+    if (isAudioPlaying) setPendingReply(false)
+  }, [isAudioPlaying])
+
+  // Continuous loop: re-arm the mic only when idle, not awaiting a reply, and
+  // the avatar is NOT speaking — so its voice can never feed back into STT.
+  useEffect(() => {
+    if (!convoActive) return
+    if (phase !== "idle") return
+    if (pendingReply) return
+    if (isAudioPlaying) return
+    void start()
+  }, [convoActive, phase, pendingReply, isAudioPlaying, start])
+
+  // Stop the loop on errors (e.g. mic permission denied) to avoid retry storms.
+  useEffect(() => {
+    if (error) setConvoActive(false)
+  }, [error])
 
   const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -54,32 +93,41 @@ const Chat: React.FC = () => {
     await sendText(text)
   }
 
-  const toggleRecording = async () => {
-    if (isListening) {
-      const finalTranscript = await stop()
-      if (finalTranscript) await sendText(finalTranscript)
+  const toggleConversation = () => {
+    if (convoActive) {
+      setConvoActive(false)
+      cancel()
     } else {
-      await start()
+      setConvoActive(true)
     }
   }
 
   const lastMessage = messages[messages.length - 1]
-  const liveLabel = transcript || (isConnecting ? "Connecting…" : "Listening…")
+  const liveLabel = phase === "speaking" ? transcript || "…" : "Listening…"
+
+  const renderBubble = () => {
+    if (isListening) return liveLabel
+    if (pendingReply) return "Thinking…"
+    if (lastMessage) return lastMessage.message
+    return null
+  }
+  const bubbleText = renderBubble()
+  const isLive = isListening || pendingReply
 
   return (
     <div className="fixed bottom-6 w-125 z-50 -translate-x-1/2 left-1/2 text-sm">
       <div>
         <ul className="flex flex-col gap-1 text-white">
-          {isListening ? (
-            <li className="bg-white/10 block backdrop-blur-2xl rounded-2xl border-2 border-white/10 px-3 py-1 w-fit text-sm transition animate-in italic opacity-80">
-              {liveLabel}
+          {bubbleText && (
+            <li
+              className={
+                isLive
+                  ? "bg-white/10 block backdrop-blur-2xl rounded-2xl border-2 border-white/10 px-3 py-1 w-fit text-sm transition animate-in italic opacity-80"
+                  : "bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit text-sm transition animate-in"
+              }
+            >
+              {bubbleText}
             </li>
-          ) : (
-            lastMessage && (
-              <li className="bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit text-sm transition animate-in">
-                {lastMessage.message}
-              </li>
-            )
           )}
         </ul>
         <div className="flex gap-2 mt-2">
@@ -93,8 +141,13 @@ const Chat: React.FC = () => {
               <Send />
             </Button>
           </form>
-          <Button className="w-14" onClick={toggleRecording}>
-            {isListening ? <Disc /> : <Mic />}
+          <Button
+            className={
+              convoActive ? "w-14 bg-red-500/30 hover:bg-red-500/40" : "w-14"
+            }
+            onClick={toggleConversation}
+          >
+            {convoActive ? <Disc /> : <Mic />}
           </Button>
         </div>
       </div>

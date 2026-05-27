@@ -62,8 +62,12 @@ Place your VRM avatar at `web/public/models/AvatarSample_M.vrm` and Mixamo FBX a
 
 ## Architecture
 
-Voice turns are transcribed live over a WebSocket (shown as a "listening" bubble);
-on stop, the final transcript is sent as text to `/api/chat` for the spoken reply.
+Voice input is hands-free and continuous: click the mic once to start a
+conversation. Client-side voice activity detection waits for speech, transcribes
+live over a WebSocket, and auto-sends the transcript to `/api/chat` when you stop
+talking. The avatar replies, then the mic re-arms automatically for the next turn
+— and stays muted while the avatar is speaking so its own voice never feeds back
+into transcription. Click the mic again to end the conversation.
 
 ```
 User speaking ──PCM over ws──▶ /api/transcribe ──▶ ElevenLabs Scribe v2 Realtime

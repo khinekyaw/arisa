@@ -60,10 +60,11 @@ Response shape:
 }
 ```
 
-## Live Transcription (WebSocket)
+## Live Transcription (WebSocket + VAD)
 
-While the user holds a voice turn, the mic is transcribed in real time and shown
-as a live bubble — separate from the `/api/chat` pipeline.
+Voice input is hands-free, like a typical assistant. Clicking the mic *arms*
+listening; transcription only starts once the user actually speaks, and the turn
+auto-sends after they stop.
 
 ```
 Mic → AudioContext (16kHz PCM) → ws://…/api/transcribe (backend proxy)
@@ -75,17 +76,48 @@ Mic → AudioContext (16kHz PCM) → ws://…/api/transcribe (backend proxy)
         committed_transcript ────────┘  (final segment)
 ```
 
-- **Frontend**: `useStreamingTranscription.ts` captures mic audio via the Web
-  Audio API, converts Float32 → 16-bit PCM, base64-encodes it, and sends
-  `input_audio_chunk` messages. It exposes `start()`, `stop()`, `isListening`,
-  `isConnecting`, and the running `transcript`.
+**Phase machine** (`useStreamingTranscription.ts`, client-side VAD):
+
+| Phase | Behavior |
+|---|---|
+| `armed` | Mic + WS open. Audio is buffered, **not sent**. Watching RMS energy for speech onset. Bubble shows "Listening…". Auto-cancels after `armTimeoutMs` (12s) of no speech. |
+| `speaking` | Onset confirmed (`minVoicedFrames` voiced frames). Pre-buffer is flushed so the first word isn't clipped, then frames stream live. Bubble shows the running transcript. |
+| → `idle` | Trailing silence ≥ `silenceMs` (1.2s) ends the turn automatically. |
+
+- **VAD** is pure client-side: RMS energy is computed on the PCM frames already
+  captured, so no extra library. Thresholds (`speechThreshold`, `silenceThreshold`,
+  `silenceMs`) are hook options; defaults live in `DEFAULTS`.
+- **Auto-send**: on turn end the hook calls `onTurnEnd(transcript)`. `Chat.tsx`
+  passes `sendText`, which POSTs the text to `/api/chat` — skipping batch STT
+  (no redundant transcription, lower cost).
 - **Backend**: `ws/transcribeSocket.ts` is a thin proxy. It opens an upstream WS
   to ElevenLabs with the `xi-api-key` header (the key never reaches the browser)
   and pipes messages both ways. Origin is checked against `CLIENT_ORIGIN`.
-- **On stop**: `stop()` sends a final `commit:true` chunk, waits up to 2s for the
-  last `committed_transcript`, then resolves with the full text. `Chat.tsx` sends
-  that text to `POST /api/chat` as the `text` field — skipping the batch STT step
-  entirely (no redundant transcription, lower cost).
+
+### Continuous conversation loop & anti-feedback
+
+The mic button toggles **conversation mode** (`convoActive` in `Chat.tsx`), not a
+single turn. The loop runs hands-free until toggled off:
+
+```
+arm → speak → (VAD silence) → auto-send → avatar replies (TTS plays) → re-arm → …
+```
+
+The re-arm is gated by a single effect that only fires `start()` when **all** of:
+`convoActive && phase === "idle" && !pendingReply && !isAudioPlaying`.
+
+- `pendingReply` covers the "thinking" gap (sent, awaiting reply). Cleared when
+  the avatar's audio starts, with a `REPLY_FALLBACK_MS` safety net for replies
+  with no audio.
+- `isAudioPlaying` (from `avatarStore`) covers the "speaking" phase. **This is the
+  anti-feedback guard**: the mic is never armed while the avatar is talking, and
+  between turns the audio graph is fully torn down — so TTS output can never be
+  captured and transcribed as user speech.
+- Errors (e.g. mic permission denied) flip `convoActive` off to avoid a retry storm.
+
+Barge-in (interrupting the avatar mid-reply) is intentionally **not** supported —
+it requires reliable acoustic echo cancellation against loudspeaker TTS and risks
+feedback. Add it later by keeping capture alive during playback behind AEC.
 
 The model is `scribe_v2_realtime` (override via `ELEVENLABS_STT_MODEL_ID`).
 Audio is PCM at the AudioContext sample rate (requested 16kHz; the actual rate

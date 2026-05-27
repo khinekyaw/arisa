@@ -53,4 +53,6 @@ Both are gitignored. Use `.env.example` as template.
 - The LLM system prompt in `voiceRoute.ts` defines the `<avatar>` JSON format — keep it in sync with the `AvatarMeta` interface
 - Session history in `voiceRoute.ts` is in-memory and not shared across workers
 - The transcription WS proxy must keep `ELEVENLABS_API_KEY` server-side — never send it to the browser
-- Voice input streams PCM live for transcription, then sends the final text to `/api/chat` (no audio upload); the batch STT path in `voiceRoute.ts` remains for direct audio POSTs
+- Voice input is hands-free and continuous: the mic button toggles `convoActive` in `Chat.tsx`. Client-side VAD in `useStreamingTranscription.ts` transcribes on speech onset and auto-sends to `/api/chat` after trailing silence; the loop re-arms each turn. The batch STT path in `voiceRoute.ts` remains for direct audio POSTs
+- Anti-feedback: the re-arm effect in `Chat.tsx` must keep gating on `isAudioPlaying` — never arm the mic while the avatar's TTS is playing, or it will transcribe its own voice
+- VAD thresholds (`speechThreshold`, `silenceThreshold`, `silenceMs`) are tunable options on `useStreamingTranscription`; defaults are mic-dependent and may need adjusting
