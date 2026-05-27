@@ -7,11 +7,11 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 
 const api = axios.create({
-  baseURL: "http://localhost:3001/api/",
+  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/",
   timeout: 50000,
 })
 
-const chatApiPath = "/chat"
+const chatApiPath = "chat"
 
 interface ChatResponse {
   audio_base64: string

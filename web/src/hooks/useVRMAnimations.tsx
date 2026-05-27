@@ -27,31 +27,19 @@ type AnimationName = (typeof ANIMATIONS)[number]["name"]
 
 function useAllFBX() {
   const idle = useFBX(ANIMATIONS[0].path)
-  const hidl = useFBX(ANIMATIONS[1].path)
+  const idle1 = useFBX(ANIMATIONS[1].path)
   const happy = useFBX(ANIMATIONS[2].path)
   const talk = useFBX(ANIMATIONS[3].path)
   const think = useFBX(ANIMATIONS[4].path)
   const wave = useFBX(ANIMATIONS[5].path)
-  const aug = useFBX(ANIMATIONS[6].path)
+  const arguing = useFBX(ANIMATIONS[6].path)
   const dance = useFBX(ANIMATIONS[7].path)
   const talk1 = useFBX(ANIMATIONS[8].path)
   const thank = useFBX(ANIMATIONS[9].path)
   const greet = useFBX(ANIMATIONS[10].path)
   return useMemo(
-    () => [
-      idle,
-      hidl,
-      happy,
-      talk,
-      think,
-      wave,
-      aug,
-      dance,
-      talk1,
-      thank,
-      greet,
-    ],
-    [idle, hidl, happy, talk, think, wave, aug, dance, talk1, thank, greet],
+    () => [idle, idle1, happy, talk, think, wave, arguing, dance, talk1, thank, greet],
+    [idle, idle1, happy, talk, think, wave, arguing, dance, talk1, thank, greet],
   )
 }
 

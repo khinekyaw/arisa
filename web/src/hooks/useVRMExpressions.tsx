@@ -36,7 +36,7 @@ export function useVRMExpressions(vrm: VRM | null) {
   }
 
   const getExpressionKey = (key: string) => {
-    return keyNameMap[key]
+    return keyNameMap[key] ?? key
   }
 
   const lerpExpression = useCallback(
