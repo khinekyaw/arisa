@@ -36,9 +36,9 @@ function Scene() {
         <Bloom mipmapBlur intensity={0.7} />
       </EffectComposer>
       {/* Avatar */}
-      <group position={[0, -1.15, 0]}>
+      <group position={[0, -1, 0]}>
         <Avatar
-          path="models/maid.glb"
+          path="models/AvatarSample_M.vrm"
           // rotation={[0, Math.PI, 0]}
         />
         <ContactShadows position={[0, 0, 0]} opacity={0.5} />
