@@ -1,12 +1,12 @@
 import axios from "axios"
 import { exec } from "child_process"
-import { randomUUID } from "crypto"
 import { Request, Response, Router } from "express"
 import FormData from "form-data"
 import { readFile, unlink } from "fs/promises"
 import multer from "multer"
 import { promisify } from "util"
 import { data } from "../mock/data"
+import { appendTurn, ensureSession, getHistory } from "../services/history"
 
 const router = Router()
 const upload = multer({ dest: "/tmp/" })
@@ -37,38 +37,6 @@ interface AvatarMeta {
     angry: number
     relaxed: number
     suprised: number
-  }
-}
-
-// ─── Message History ─────────────────────────────────────────────────────────
-const MAX_HISTORY = 20
-
-interface HistoryMessage {
-  role: "user" | "assistant"
-  content: string
-}
-
-// In-memory history store keyed by sessionId
-const sessionHistories = new Map<string, HistoryMessage[]>()
-
-function getHistory(sessionId: string): HistoryMessage[] {
-  if (!sessionHistories.has(sessionId)) {
-    sessionHistories.set(sessionId, [])
-  }
-  return sessionHistories.get(sessionId)!
-}
-
-function appendHistory(
-  sessionId: string,
-  userMessage: string,
-  assistantMessage: string,
-): void {
-  const history = getHistory(sessionId)
-  history.push({ role: "user", content: userMessage })
-  history.push({ role: "assistant", content: assistantMessage })
-  // Keep only the last MAX_HISTORY messages (pairs)
-  if (history.length > MAX_HISTORY) {
-    history.splice(0, history.length - MAX_HISTORY)
   }
 }
 
@@ -221,7 +189,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const textInput: string | undefined = req.body?.text
-      const sessionId: string = req.body?.session_id || randomUUID()
+      const sessionId = ensureSession(req.body?.session_id)
 
       if (!textInput && !req.file) {
         res
@@ -245,7 +213,7 @@ router.post(
         sessionId,
       )
 
-      appendHistory(sessionId, transcript, llmResponse)
+      appendTurn(sessionId, transcript, llmResponse)
 
       const audioBuffer = await textToSpeech(llmResponse)
 

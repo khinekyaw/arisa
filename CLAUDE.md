@@ -36,12 +36,13 @@ See `AGENT.md` for full architecture. Key files:
 - `web/src/components/Avatar.tsx` — VRM loader + all VRM hooks
 - `backend/src/routes/voiceRoute.ts` — entire voice pipeline (STT → LLM → TTS)
 - `backend/src/ws/transcribeSocket.ts` — WS proxy to ElevenLabs realtime STT
+- `backend/src/db/index.ts` + `backend/src/services/history.ts` — SQLite conversation memory
 - `web/src/hooks/useStreamingTranscription.ts` — live mic transcription (client)
 
 ## Env Files
 
 - `web/.env` — `VITE_DEBUG`, `VITE_API_URL`, `VITE_WS_URL`
-- `backend/.env` — `PORT`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL_ID`, `XAI_API_KEY`, `CLIENT_ORIGIN`
+- `backend/.env` — `PORT`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL_ID`, `XAI_API_KEY`, `CLIENT_ORIGIN`, `DATABASE_PATH`
 
 Both are gitignored. Use `.env.example` as template.
 
@@ -51,7 +52,8 @@ Both are gitignored. Use `.env.example` as template.
 - VRM expression hooks share `expressionManager`; always lerp values, never hard-set
 - `VITE_` prefix required on all env vars exposed to the frontend
 - The LLM system prompt in `voiceRoute.ts` defines the `<avatar>` JSON format — keep it in sync with the `AvatarMeta` interface
-- Session history in `voiceRoute.ts` is in-memory and not shared across workers
+- Conversation memory is SQLite (`better-sqlite3`) via `services/history.ts`; `getHistory` is a sliding window (last `DEFAULT_HISTORY_LIMIT` messages), full history stays persisted. Frontend must send `session_id` (stored in `localStorage` as `arisa_session_id`) for memory to work
+- `better-sqlite3` is a native module — reinstall (`npm install`) after Node version changes or it will fail to load
 - The transcription WS proxy must keep `ELEVENLABS_API_KEY` server-side — never send it to the browser
 - Voice input is hands-free and continuous: the mic button toggles `convoActive` in `Chat.tsx`. Client-side VAD in `useStreamingTranscription.ts` transcribes on speech onset and auto-sends to `/api/chat` after trailing silence; the loop re-arms each turn. The batch STT path in `voiceRoute.ts` remains for direct audio POSTs
 - Anti-feedback: the re-arm effect in `Chat.tsx` must keep gating on `isAudioPlaying` — never arm the mic while the avatar's TTS is playing, or it will transcribe its own voice

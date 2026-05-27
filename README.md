@@ -12,7 +12,8 @@ A real-time voice AI avatar. Speak or type to Arisa — a 3D VRM character who l
 | LLM | xAI Grok |
 | Text-to-Speech | ElevenLabs TTS |
 | Lip-sync | `wawa-lipsync` (real-time) |
-| State | Zustand |
+| State | Zustand (frontend) |
+| Memory | SQLite via better-sqlite3 (conversation history) |
 
 ## Prerequisites
 
@@ -40,6 +41,7 @@ ELEVENLABS_VOICE_ID=...          # optional — defaults to Bella
 ELEVENLABS_STT_MODEL_ID=...      # optional — defaults to scribe_v2_realtime
 XAI_API_KEY=...
 CLIENT_ORIGIN=http://localhost:5173   # optional — allowed WebSocket origin
+DATABASE_PATH=data/arisa.db           # optional — SQLite history file
 ```
 
 ### Frontend

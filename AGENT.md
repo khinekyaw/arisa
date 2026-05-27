@@ -31,6 +31,10 @@ v1/
         │   └── voiceRoute.ts    POST /api/chat pipeline
         ├── ws/
         │   └── transcribeSocket.ts   WS proxy → ElevenLabs realtime STT
+        ├── db/
+        │   └── index.ts          SQLite connection + schema (better-sqlite3)
+        ├── services/
+        │   └── history.ts        Session + message persistence
         └── mock/
             └── data.ts          Static test fixture for /api/chat/test
 ```
@@ -123,6 +127,28 @@ The model is `scribe_v2_realtime` (override via `ELEVENLABS_STT_MODEL_ID`).
 Audio is PCM at the AudioContext sample rate (requested 16kHz; the actual rate
 is read back and sent per-chunk, so any supported rate works without resampling).
 
+## Conversation Memory (SQLite)
+
+History is persisted with `better-sqlite3` (single file, no external service).
+
+- **Schema** (`db/index.ts`): `sessions(id, created_at, updated_at)` and
+  `messages(id, session_id, role, content, created_at)`, FK cascade on delete.
+- **Service** (`services/history.ts`):
+  - `ensureSession(id?)` — returns the id, creating the row if missing.
+  - `getHistory(id, limit = 20)` — last N messages, chronological. **Sliding
+    window**: the full history stays in SQLite, but only the tail is fed to the
+    model (`DEFAULT_HISTORY_LIMIT`).
+  - `appendTurn(id, user, assistant)` — writes both messages in one transaction.
+- **Flow**: `POST /api/chat` calls `ensureSession(req.body.session_id)`, passes the
+  recent window to `askGrok`, then `appendTurn`. The `session_id` is returned in
+  the response; the frontend persists it in `localStorage` (`arisa_session_id`)
+  and sends it on every request, so memory survives reloads.
+- **DB path**: `DATABASE_PATH` env (default `data/arisa.db`). Gitignored.
+
+This is a deliberate window-only design — no summarization or vector search yet.
+Add rolling summarization first if sessions grow long (see git history / prior
+discussion); vector search only if durable cross-session recall is needed.
+
 ## Avatar State (Zustand)
 
 `avatarStore.ts` is the single source of truth for avatar playback:
@@ -175,6 +201,7 @@ Add a new `router.post(...)` in `backend/src/routes/voiceRoute.ts` or create a n
 - `ELEVENLABS_STT_MODEL_ID` — realtime STT model (default `scribe_v2_realtime`)
 - `XAI_API_KEY`
 - `CLIENT_ORIGIN` — allowed WS origin (default `http://localhost:5173`)
+- `DATABASE_PATH` — SQLite file path (default `data/arisa.db`)
 
 **Frontend (`web/.env`)**
 - `VITE_API_URL` — backend base URL (default `http://localhost:3001/api/`)

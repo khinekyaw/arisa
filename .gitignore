@@ -52,3 +52,9 @@ logs/
 # Temp
 tmp/
 temp/
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+data/

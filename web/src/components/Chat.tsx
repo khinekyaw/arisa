@@ -1,6 +1,6 @@
 import axios from "axios"
 import { Disc, Mic, Send } from "lucide-react"
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useStreamingTranscription } from "../hooks/useStreamingTranscription"
 import { useAvatarStore } from "../store/avatarStore"
 import { Button } from "./ui/button"
@@ -12,12 +12,14 @@ const api = axios.create({
 })
 
 const chatApiPath = "chat"
+const SESSION_KEY = "arisa_session_id"
 
 // Fallback: if a reply produces no audio, clear the "thinking" gate after this
 // long so the conversation loop doesn't stall.
 const REPLY_FALLBACK_MS = 3000
 
 interface ChatResponse {
+  session_id: string
   audio_base64: string
   audio_mime: string
   message: string
@@ -43,13 +45,25 @@ const Chat: React.FC = () => {
   const setValues = useAvatarStore((s) => s.setValues)
   const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
 
+  // Persisted across reloads so the backend keeps conversation memory.
+  const sessionIdRef = useRef<string | undefined>(
+    localStorage.getItem(SESSION_KEY) ?? undefined,
+  )
+
   const sendText = useCallback(
     async (text: string) => {
       setMessages((prev) => [...prev, { message: text, fromUser: true }])
       setPendingReply(true)
       try {
-        const response = await api.post<ChatResponse>(chatApiPath, { text })
+        const response = await api.post<ChatResponse>(chatApiPath, {
+          text,
+          session_id: sessionIdRef.current,
+        })
         if (response.data) {
+          if (response.data.session_id) {
+            sessionIdRef.current = response.data.session_id
+            localStorage.setItem(SESSION_KEY, response.data.session_id)
+          }
           setMessages((prev) => [...prev, { message: response.data.message }])
           setValues(response.data)
         }
