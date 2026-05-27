@@ -9,7 +9,12 @@ function App() {
   return (
     <>
       <Chat />
-      <Canvas shadows camera={{ position: [0, 0.5, 3.2], fov: 20 }}>
+      <Canvas
+        shadows
+        dpr={[1, 2]}
+        performance={{ min: 0.5 }}
+        camera={{ position: [0, 0.5, 3.2], fov: 20 }}
+      >
         <Suspense fallback={null}>
           <Scene />
         </Suspense>

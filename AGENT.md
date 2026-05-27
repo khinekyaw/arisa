@@ -167,7 +167,21 @@ When `isIdle` becomes true, `clearValues()` is called automatically — hooks th
 All hooks live in `web/src/hooks/` and are consumed exclusively by `Avatar.tsx`.
 
 - **useVRMLipSync** — plays base64 audio, drives mouth shapes via `wawa-lipsync` visemes on every `useFrame`.
-- **useVRMAnimations** — loads 11 Mixamo FBX clips, remaps to VRM bones. One-shot animations (from `avatarState.animation`) use `LoopOnce`. Idle loop plays when not animating.
+- **useVRMAnimations** — loads the Mixamo FBX clips, remaps to VRM bones, and runs
+  a single animation controller (crossfade + one `"finished"` listener):
+  - **Idle cycle**: when not playing a one-shot, it loops one idle, holds it for a
+    random `IDLE_HOLD_MIN_MS`–`IDLE_HOLD_MAX_MS` (8–16s), then crossfades to the
+    next (`pickIdle`). Calm `BASE_IDLE` clips (`idle`, `idle_1`, `idle_2`) play
+    most of the time; the expressive `SPECIAL_IDLE` clips (`happy_idle`,
+    `fan_idle`, `nails_idle`) appear only ~`SPECIAL_IDLE_CHANCE` (20%), never two
+    specials in a row, and never the exact same idle twice in a row.
+    Idle loops (`LoopRepeat`) so the avatar keeps moving instead of freezing on a
+    final frame; one-shots use a snappy `ONESHOT_FADE` for instant response.
+  - **One-shots** (`LoopOnce`): backend `avatarState.animation` (talk/wave/etc.) and
+    the click reaction. On finish, control returns to the idle cycle.
+  - **Click to react**: the hook returns `playReaction()`; `Avatar.tsx` calls it
+    from the group's `onClick`, playing `reacting.fbx`.
+  - In debug (`VITE_DEBUG`), the Leva "animation" dropdown fires a one-shot.
 - **useVRMExpressions** — lerps VRM expression weights toward target values from `avatarState.expression`. Falls back to Leva debug controls when no state is active.
 - **useVRMBlink** — randomised blink timer, independent of other systems.
 - **useVRMLookAt** — makes eyes track the camera position, clamped to ±0.8 units.
@@ -176,9 +190,12 @@ All hooks live in `web/src/hooks/` and are consumed exclusively by `Avatar.tsx`.
 
 1. Add the FBX to `web/public/animations/`.
 2. Add an entry to the `ANIMATIONS` array in `useVRMAnimations.tsx`.
-3. Add a new `useFBX(...)` call in `useAllFBX()` and include it in the returned array (hooks must not be conditional or in loops).
-4. Update the `AnimationName` type in `voiceRoute.ts` to include the new name.
-5. Update the LLM system prompt in `voiceRoute.ts` to describe when to use it.
+3. Add a new `useFBX(...)` call in `useAllFBX()` and append it to the returned
+   array **in the same index order as `ANIMATIONS`** (the clip→name mapping is
+   positional). Hooks must not be conditional or in loops.
+4. To make it a backend-triggered animation: update the `AnimationName` type and
+   the LLM system prompt in `voiceRoute.ts`.
+5. To add it to the idle rotation: add its name to `IDLE_POOL`.
 
 ## Adding a New API Endpoint
 

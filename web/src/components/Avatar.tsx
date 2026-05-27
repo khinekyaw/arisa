@@ -41,7 +41,7 @@ const Avatar = ({ path = "models/avatar.glb", ...props }: AvatarProps) => {
   useVRMBlink(currentVrm)
   useVRMExpressions(currentVrm)
   useVRMLookAt(currentVrm)
-  useVRMAnimations(currentVrm)
+  const { playReaction } = useVRMAnimations(currentVrm)
   useVRMLipSync(currentVrm)
 
   // Optimize VRM
@@ -90,7 +90,15 @@ const Avatar = ({ path = "models/avatar.glb", ...props }: AvatarProps) => {
   })
 
   return (
-    <group ref={groupRef} position={[0, ENTRY_START_Y, 0]} {...props}>
+    <group
+      ref={groupRef}
+      position={[0, ENTRY_START_Y, 0]}
+      onClick={(e) => {
+        e.stopPropagation()
+        playReaction()
+      }}
+      {...props}
+    >
       <primitive object={scene} />
     </group>
   )
