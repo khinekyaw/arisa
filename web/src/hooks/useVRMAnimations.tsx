@@ -36,6 +36,9 @@ const ANIMATIONS = [
 
 type AnimationName = (typeof ANIMATIONS)[number]["name"]
 
+const ENABLE_RANDOM_IDLE: boolean = true
+const ENABLE_CLICK_REACTION: boolean = true
+
 // Calm base idles play most of the time. The expressive "special" idles appear
 // only occasionally (~SPECIAL_IDLE_CHANCE) and never twice in a row.
 const BASE_IDLE: AnimationName[] = ["idle", "idle_1", "idle_2"]
@@ -181,6 +184,12 @@ export function useVRMAnimations(vrm: VRM) {
       fade: number,
     ) => {
       const prev = current
+      // Stop leftover clips from earlier fades. crossFadeTo/fadeOut only ramp
+      // weight to 0 — the action keeps *running* in the mixer (advanced every
+      // frame) until stopped. Without this they pile up and steadily cost FPS.
+      for (const a of Object.values(actions)) {
+        if (a && a !== action && a !== prev && a.isRunning()) a.stop()
+      }
       action.clampWhenFinished = loop === LoopOnce
       action.loop = loop
       action.reset()
@@ -199,11 +208,20 @@ export function useVRMAnimations(vrm: VRM) {
     // so the avatar keeps moving instead of clamping on a final frame.
     const playIdle = () => {
       mode = "idle"
+      clearIdleTimer()
+
+      // TEMP: random idle cycling disabled to test its perf impact.
+      // Flip ENABLE_RANDOM_IDLE back to true to restore.
+      if (!ENABLE_RANDOM_IDLE) {
+        const action = actions["idle"]
+        if (action) crossfadeTo(action, LoopRepeat, IDLE_FADE)
+        return
+      }
+
       const name = pickIdle(lastIdle)
       lastIdle = name
       const action = actions[name]
       if (action) crossfadeTo(action, LoopRepeat, IDLE_FADE)
-      clearIdleTimer()
       idleTimer = window.setTimeout(
         () => {
           if (mode === "idle") playIdle()
@@ -256,6 +274,8 @@ export function useVRMAnimations(vrm: VRM) {
 
   // Exposed so the avatar can react to being clicked.
   const playReaction = useCallback(() => {
+    // TEMP: click reaction disabled to test its perf impact.
+    if (!ENABLE_CLICK_REACTION) return
     controllerRef.current?.playOneShot("react")
   }, [])
 

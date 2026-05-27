@@ -54,6 +54,10 @@ const Avatar = ({ path = "models/avatar.glb", ...props }: AvatarProps) => {
     VRMUtils.combineMorphs(vrm)
     vrm.scene.traverse((obj) => {
       obj.frustumCulled = false
+      // Skinned-mesh raycasting re-skins every vertex on the CPU per ray test.
+      // R3F raycasts on every pointer move (click, hover, zoom-drag), so this
+      // tanks FPS. Disable it on the VRM and use a cheap collider for clicks.
+      obj.raycast = () => {}
     })
 
     // Reset entry position and trigger animation
@@ -90,16 +94,19 @@ const Avatar = ({ path = "models/avatar.glb", ...props }: AvatarProps) => {
   })
 
   return (
-    <group
-      ref={groupRef}
-      position={[0, ENTRY_START_Y, 0]}
-      onClick={(e) => {
-        e.stopPropagation()
-        playReaction()
-      }}
-      {...props}
-    >
+    <group ref={groupRef} position={[0, ENTRY_START_Y, 0]} {...props}>
       <primitive object={scene} />
+      {/* Cheap invisible click target — avoids raycasting the skinned mesh. */}
+      <mesh
+        position={[0, 0.8, 0]}
+        onClick={(e) => {
+          e.stopPropagation()
+          playReaction()
+        }}
+      >
+        <boxGeometry args={[0.7, 1.7, 0.5]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
     </group>
   )
 }

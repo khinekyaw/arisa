@@ -50,6 +50,7 @@ Both are gitignored. Use `.env.example` as template.
 
 - `useFBX` calls in `useVRMAnimations.tsx` must remain unconditional — adding an animation requires a new line, not a loop
 - VRM expression hooks share `expressionManager`; always lerp values, never hard-set
+- Never attach R3F pointer handlers (`onClick`/`onPointerOver`) directly to the VRM meshes: R3F raycasts on every pointer move and skinned-mesh raycasting re-skins all vertices on the CPU, tanking FPS during clicks/hover/zoom. The VRM meshes set `raycast = () => {}` in `Avatar.tsx`; use the invisible box collider for clicks
 - `VITE_` prefix required on all env vars exposed to the frontend
 - The LLM system prompt in `voiceRoute.ts` defines the `<avatar>` JSON format — keep it in sync with the `AvatarMeta` interface
 - Conversation memory is SQLite (`better-sqlite3`) via `services/history.ts`; `getHistory` is a sliding window (last `DEFAULT_HISTORY_LIMIT` messages), full history stays persisted. Frontend must send `session_id` (stored in `localStorage` as `arisa_session_id`) for memory to work
