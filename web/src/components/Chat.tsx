@@ -3,6 +3,7 @@ import { Disc, Mic, Send } from "lucide-react"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useStreamingTranscription } from "../hooks/useStreamingTranscription"
 import { useAvatarStore } from "../store/avatarStore"
+import MarqueeText from "./MarqueeText"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 
@@ -30,6 +31,8 @@ interface ChatResponse {
   }
   animation: string
   expression: Record<string, number>
+  sources?: string[]
+  panel?: { title: string; items: string[] } | null
 }
 
 const Chat: React.FC = () => {
@@ -41,8 +44,12 @@ const Chat: React.FC = () => {
   const [convoActive, setConvoActive] = useState(false)
   // True between sending a turn and the avatar starting to speak.
   const [pendingReply, setPendingReply] = useState(false)
+  // The spoken reply auto-hides a couple seconds after the avatar finishes.
+  const [replyHidden, setReplyHidden] = useState(false)
 
   const setValues = useAvatarStore((s) => s.setValues)
+  const setSources = useAvatarStore((s) => s.setSources)
+  const setPanel = useAvatarStore((s) => s.setPanel)
   const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
 
   // Persisted across reloads so the backend keeps conversation memory.
@@ -66,6 +73,8 @@ const Chat: React.FC = () => {
           }
           setMessages((prev) => [...prev, { message: response.data.message }])
           setValues(response.data)
+          setSources(response.data.sources ?? [])
+          setPanel(response.data.panel ?? null)
         }
       } finally {
         // Audio playback normally clears pendingReply; this guards replies
@@ -73,7 +82,7 @@ const Chat: React.FC = () => {
         window.setTimeout(() => setPendingReply(false), REPLY_FALLBACK_MS)
       }
     },
-    [setValues],
+    [setValues, setSources, setPanel],
   )
 
   const { phase, isListening, transcript, error, start, cancel } =
@@ -83,6 +92,17 @@ const Chat: React.FC = () => {
   useEffect(() => {
     if (isAudioPlaying) setPendingReply(false)
   }, [isAudioPlaying])
+
+  // Keep the reply visible during any active turn; once the avatar has finished
+  // speaking (and isn't listening or thinking), hide the result after 2s.
+  useEffect(() => {
+    if (isAudioPlaying || isListening || pendingReply) {
+      setReplyHidden(false)
+      return
+    }
+    const t = window.setTimeout(() => setReplyHidden(true), 2000)
+    return () => clearTimeout(t)
+  }, [isAudioPlaying, isListening, pendingReply])
 
   // Continuous loop: re-arm the mic only when idle, not awaiting a reply, and
   // the avatar is NOT speaking — so its voice can never feed back into STT.
@@ -122,7 +142,7 @@ const Chat: React.FC = () => {
   const renderBubble = () => {
     if (isListening) return liveLabel
     if (pendingReply) return "Thinking…"
-    if (lastMessage) return lastMessage.message
+    if (lastMessage && !replyHidden) return lastMessage.message
     return null
   }
   const bubbleText = renderBubble()
@@ -136,11 +156,11 @@ const Chat: React.FC = () => {
             <li
               className={
                 isLive
-                  ? "bg-white/10 block backdrop-blur-2xl rounded-2xl border-2 border-white/10 px-3 py-1 w-fit text-sm transition animate-in italic opacity-80"
-                  : "bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit text-sm transition animate-in"
+                  ? "bg-white/10 block backdrop-blur-2xl rounded-2xl border-2 border-white/10 px-3 py-1 w-fit max-w-full text-sm transition animate-in italic opacity-80"
+                  : "bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit max-w-full text-sm transition animate-in"
               }
             >
-              {bubbleText}
+              <MarqueeText text={bubbleText} />
             </li>
           )}
         </ul>

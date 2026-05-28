@@ -24,7 +24,7 @@ function Scene() {
         maxDistance={10}
       />
       <Environment preset="sunset" />
-      <directionalLight intensity={2} position={[10, 10, 5]} />
+      <directionalLight intensity={1.2} position={[10, 10, 5]} />
       <directionalLight intensity={1} position={[-10, 10, 5]} />
       <EffectComposer multisampling={0}>
         <Bloom mipmapBlur intensity={0.7} />

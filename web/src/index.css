@@ -8,7 +8,7 @@
 
 body {
   margin: 0;
-  background-image: linear-gradient(0deg, #b997d9 0%, #b4b4f0 100%);
+  background-image: linear-gradient(0deg, #0d071d 0%, #111129 100%);
 }
 
 @import "tailwindcss";
@@ -203,4 +203,27 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(var(--marquee-w, 0px) * -1));
+  }
+}
+
+.animate-marquee {
+  animation: marquee linear infinite;
+  will-change: transform;
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
