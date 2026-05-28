@@ -221,7 +221,18 @@ export function useVRMAnimations(vrm: VRM) {
       const name = pickIdle(lastIdle)
       lastIdle = name
       const action = actions[name]
-      if (action) crossfadeTo(action, LoopRepeat, IDLE_FADE)
+      if (!action) return
+
+      // Special idles (fan/nails gestures) look unnatural looping, so play them
+      // once and advance to the next idle when they finish. pickIdle already
+      // forbids special-after-special, so a special never repeats. Base idles
+      // loop for a random hold to keep the avatar moving.
+      if (SPECIAL_IDLE.includes(name)) {
+        crossfadeTo(action, LoopOnce, IDLE_FADE)
+        return
+      }
+
+      crossfadeTo(action, LoopRepeat, IDLE_FADE)
       idleTimer = window.setTimeout(
         () => {
           if (mode === "idle") playIdle()
@@ -243,8 +254,10 @@ export function useVRMAnimations(vrm: VRM) {
     const onFinished = (
       e: { action: AnimationAction } & Event<"finished", AnimationMixer>,
     ) => {
-      if (e.action !== current || mode !== "oneshot") return
-      setAnimationPlaying(false)
+      if (e.action !== current) return
+      // Reached either from a backend/click one-shot or a once-played special
+      // idle; in both cases return to the idle cycle.
+      if (mode === "oneshot") setAnimationPlaying(false)
       playIdle()
     }
 
@@ -273,10 +286,14 @@ export function useVRMAnimations(vrm: VRM) {
     controllerRef.current?.playOneShot(animation)
   }, [animation])
 
-  // Exposed so the avatar can react to being clicked.
+  // Exposed so the avatar can react to being clicked. Ignore clicks while a
+  // one-shot (reaction or reply animation) is still playing or the avatar is
+  // speaking, so rapid clicks can't restart the reaction before it finishes.
   const playReaction = useCallback(() => {
     // TEMP: click reaction disabled to test its perf impact.
     if (!ENABLE_CLICK_REACTION) return
+    const { isAnimationPlaying, isAudioPlaying } = useAvatarStore.getState()
+    if (isAnimationPlaying || isAudioPlaying) return
     controllerRef.current?.playOneShot("react")
   }, [])
 

@@ -76,7 +76,7 @@ async function askGrok(
   const response = await axios.post(
     "https://api.x.ai/v1/chat/completions",
     {
-      model: "grok-4-1-fast-non-reasoning",
+      model: "grok-4.20-0309-non-reasoning",
       messages: [
         {
           role: "system",
