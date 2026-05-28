@@ -42,7 +42,7 @@ const ENABLE_CLICK_REACTION: boolean = true
 // Calm base idles play most of the time. The expressive "special" idles appear
 // only occasionally (~SPECIAL_IDLE_CHANCE) and never twice in a row.
 const BASE_IDLE: AnimationName[] = ["idle", "idle_1", "idle_2"]
-const SPECIAL_IDLE: AnimationName[] = ["happy_idle", "fan_idle", "nails_idle"]
+const SPECIAL_IDLE: AnimationName[] = ["fan_idle", "nails_idle"]
 const SPECIAL_IDLE_CHANCE = 0.2
 
 // Picks the next idle: weighted toward base idles, with no special-after-special
@@ -226,7 +226,8 @@ export function useVRMAnimations(vrm: VRM) {
         () => {
           if (mode === "idle") playIdle()
         },
-        IDLE_HOLD_MIN_MS + Math.random() * (IDLE_HOLD_MAX_MS - IDLE_HOLD_MIN_MS),
+        IDLE_HOLD_MIN_MS +
+          Math.random() * (IDLE_HOLD_MAX_MS - IDLE_HOLD_MIN_MS),
       )
     }
 

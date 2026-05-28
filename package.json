@@ -1,0 +1,12 @@
+{
+  "name": "arisa",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n backend,web -c blue,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix web\"",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
