@@ -6,7 +6,7 @@ const BgmControl = () => {
   const { enabled, setEnabled, volume, setVolume } = useBgm()
 
   return (
-    <div className="fixed top-4 right-3 sm:top-6 sm:right-6 z-50 flex items-center gap-2 glass-background px-3 py-2 text-white">
+    <div className="flex items-center gap-2 glass-background px-3 py-2 text-white">
       <button
         type="button"
         onClick={() => setEnabled((v) => !v)}

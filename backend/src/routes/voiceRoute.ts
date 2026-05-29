@@ -190,10 +190,38 @@ function stripForVoice(text: string): string {
     .trim()
 }
 
+// A short "current context" line prepended to the system prompt so the model
+// answers date/time questions directly instead of triggering a web search.
+// `now` is the live server clock formatted into the user's timezone, so the
+// time is always fresh and we never have to trust the client's system clock.
+function buildContextLine(timezone?: string, locale?: string): string {
+  const lang = locale || "en-US"
+  let now: string
+  try {
+    now = new Intl.DateTimeFormat(lang, {
+      timeZone: timezone || undefined,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).format(new Date())
+  } catch {
+    // A malformed timezone/locale from the client throws; fall back to a
+    // plain server-local stamp rather than failing the whole turn.
+    now = new Date().toString()
+  }
+  return `Current context: It is ${now}. The user's language is ${lang}. You already know the current date and time from this line, so answer date and time questions directly and never use web search for them.`
+}
+
 // ─── Step 2: LLM via xAI Grok (Agent Tools API + server-side web search) ─────
 async function askGrok(
   userMessage: string,
   sessionId: string,
+  timezone?: string,
+  locale?: string,
 ): Promise<{
   message: string
   avatar: AvatarMeta
@@ -201,12 +229,13 @@ async function askGrok(
   panel: AnswerPanel | null
 }> {
   const history = getHistory(sessionId)
+  const instructions = `${buildContextLine(timezone, locale)}\n\n${SYSTEM_PROMPT}`
 
   const response = await axios.post(
     "https://api.x.ai/v1/responses",
     {
       model: "grok-4.20-0309-non-reasoning",
-      instructions: SYSTEM_PROMPT,
+      instructions,
       // Server-side web search runs on xAI; the model decides when it needs
       // current/web info, so casual turns skip the search latency.
       tools: [{ type: "web_search" }],
@@ -328,6 +357,8 @@ router.post(
       const { message: llmResponse, avatar, sources, panel } = await askGrok(
         transcript,
         sessionId,
+        req.body?.timezone,
+        req.body?.locale,
       )
 
       appendTurn(sessionId, transcript, llmResponse)

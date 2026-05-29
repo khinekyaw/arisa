@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
 const BGM_SRC = "/sound/massobeats_noon.mp3"
-const DEFAULT_VOLUME = 0.1
+const DEFAULT_VOLUME = 0.08
 
 export function useBgm() {
   const audioRef = useRef<HTMLAudioElement | null>(null)

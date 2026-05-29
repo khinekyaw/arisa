@@ -29,6 +29,14 @@ interface AvatarStore {
   setAudioPlaying: (playing: boolean) => void
   setAnimationPlaying: (playing: boolean) => void
 
+  // Arisa's spoken-voice output controls. The TTS audio is created in
+  // useVRMLipSync (inside the Canvas), so the level lives here to be shared
+  // with the control UI rendered outside the Canvas.
+  voiceVolume: number
+  voiceMuted: boolean
+  setVoiceVolume: (volume: number) => void
+  setVoiceMuted: (muted: boolean) => void
+
   // Web search citations from the latest reply. Kept separate from `values` so
   // they persist while the avatar goes idle, instead of being cleared.
   sources: string[]
@@ -64,6 +72,11 @@ export const useAvatarStore = create<AvatarStore>((set, get) => ({
     set({ isIdle: idle })
     if (idle) clearValues()
   },
+
+  voiceVolume: 1,
+  voiceMuted: false,
+  setVoiceVolume: (volume) => set({ voiceVolume: volume }),
+  setVoiceMuted: (muted) => set({ voiceMuted: muted }),
 
   sources: [],
   setSources: (sources) => set({ sources }),

@@ -15,6 +15,11 @@ const api = axios.create({
 const chatApiPath = "chat"
 const SESSION_KEY = "arisa_session_id"
 
+// The model has no clock; sending these lets the backend stamp the current
+// time in the user's zone so trivial date/time asks skip a web search.
+const TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+const LOCALE = navigator.language
+
 // Fallback: if a reply produces no audio, clear the "thinking" gate after this
 // long so the conversation loop doesn't stall.
 const REPLY_FALLBACK_MS = 3000
@@ -65,6 +70,8 @@ const Chat: React.FC = () => {
         const response = await api.post<ChatResponse>(chatApiPath, {
           text,
           session_id: sessionIdRef.current,
+          timezone: TIMEZONE,
+          locale: LOCALE,
         })
         if (response.data) {
           if (response.data.session_id) {

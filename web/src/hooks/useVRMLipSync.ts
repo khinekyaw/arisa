@@ -45,6 +45,8 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
   const avatarState = useAvatarStore((s) => s.values)
   const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
   const setAudioPlaying = useAvatarStore((s) => s.setAudioPlaying)
+  const voiceVolume = useAvatarStore((s) => s.voiceVolume)
+  const voiceMuted = useAvatarStore((s) => s.voiceMuted)
 
   // Whenever store gets a new speech payload, play it
   useEffect(() => {
@@ -54,6 +56,8 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
     const audio = new Audio(
       `data:${avatarState.audio_mime};base64,${avatarState.audio_base64}`,
     )
+    const { voiceMuted, voiceVolume } = useAvatarStore.getState()
+    audio.volume = voiceMuted ? 0 : voiceVolume
     audioRef.current = audio
     audio.play()
 
@@ -67,6 +71,13 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
       audio.removeEventListener("ended", () => setAudioPlaying(false))
     }
   }, [avatarState])
+
+  // Apply volume/mute changes to audio that is already playing.
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = voiceMuted ? 0 : voiceVolume
+    }
+  }, [voiceVolume, voiceMuted])
 
   useFrame((_, delta) => {
     const mgr = vrm?.expressionManager
