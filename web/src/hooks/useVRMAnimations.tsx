@@ -153,9 +153,12 @@ export function useVRMAnimations(vrm: VRM) {
 
   const avatarState = useAvatarStore((s) => s.values)
   const setAnimationPlaying = useAvatarStore((s) => s.setAnimationPlaying)
+  const isThinking = useAvatarStore((s) => s.isThinking)
 
   const controllerRef = useRef<{
     playOneShot: (name: AnimationName) => void
+    playThinking: () => void
+    endThinking: () => void
   } | null>(null)
 
   // Animation controller. Built once `actions` are ready; drives the idle
@@ -166,7 +169,7 @@ export function useVRMAnimations(vrm: VRM) {
     if (!first) return
     const mixer = first.getMixer()
 
-    let mode: "idle" | "oneshot" = "idle"
+    let mode: "idle" | "oneshot" | "thinking" = "idle"
     let current: AnimationAction | null = null
     let lastIdle: AnimationName | null = null
     let idleTimer: number | null = null
@@ -251,19 +254,36 @@ export function useVRMAnimations(vrm: VRM) {
       crossfadeTo(action, LoopOnce, ONESHOT_FADE)
     }
 
+    // Loops the "think" pose while a reply is loading. Held until a reply
+    // one-shot takes over or endThinking returns to idle.
+    const playThinking = () => {
+      const action = actions["think"]
+      if (!action) return
+      mode = "thinking"
+      clearIdleTimer()
+      crossfadeTo(action, LoopRepeat, ONESHOT_FADE)
+    }
+
+    const endThinking = () => {
+      if (mode === "thinking") playIdle()
+    }
+
     const onFinished = (
       e: { action: AnimationAction } & Event<"finished", AnimationMixer>,
     ) => {
       if (e.action !== current) return
       // Reached either from a backend/click one-shot or a once-played special
-      // idle; in both cases return to the idle cycle.
+      // idle. If a reply is still loading, resume the think loop; otherwise
+      // return to the idle cycle.
       if (mode === "oneshot") setAnimationPlaying(false)
-      playIdle()
+      if (useAvatarStore.getState().isThinking) playThinking()
+      else playIdle()
     }
 
     mixer.addEventListener("finished", onFinished)
-    controllerRef.current = { playOneShot }
-    playIdle()
+    controllerRef.current = { playOneShot, playThinking, endThinking }
+    if (useAvatarStore.getState().isThinking) playThinking()
+    else playIdle()
 
     return () => {
       mixer.removeEventListener("finished", onFinished)
@@ -279,6 +299,12 @@ export function useVRMAnimations(vrm: VRM) {
       controllerRef.current?.playOneShot(avatarState.animation as AnimationName)
     }
   }, [avatarState])
+
+  // Loop the think animation while a reply is loading.
+  useEffect(() => {
+    if (isThinking) controllerRef.current?.playThinking()
+    else controllerRef.current?.endThinking()
+  }, [isThinking])
 
   // Debug: selecting an animation in the Leva panel triggers a one-shot.
   useEffect(() => {

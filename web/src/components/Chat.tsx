@@ -57,6 +57,7 @@ const Chat: React.FC = () => {
   const setPanel = useAvatarStore((s) => s.setPanel)
   const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
   const interruptVoice = useAvatarStore((s) => s.interruptVoice)
+  const setThinking = useAvatarStore((s) => s.setThinking)
 
   // Persisted across reloads so the backend keeps conversation memory.
   const sessionIdRef = useRef<string | undefined>(
@@ -100,6 +101,11 @@ const Chat: React.FC = () => {
   useEffect(() => {
     if (isAudioPlaying) setPendingReply(false)
   }, [isAudioPlaying])
+
+  // Drive the avatar's looping "think" animation while a reply is loading.
+  useEffect(() => {
+    setThinking(pendingReply)
+  }, [pendingReply, setThinking])
 
   // Keep the reply visible during any active turn; once the avatar has finished
   // speaking (and isn't listening or thinking), hide the result after 2s.

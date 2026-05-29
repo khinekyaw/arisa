@@ -1,10 +1,10 @@
 import { Suspense } from "react"
-import { Loader } from "@react-three/drei"
 import { Canvas } from "@react-three/fiber"
 
 import BgmControl from "./components/BgmControl"
 import Chat from "./components/Chat"
 import DetailPanel from "./components/DetailPanel"
+import LoadingScreen from "./components/LoadingScreen"
 import Scene from "./components/Scene"
 import VoiceControl from "./components/VoiceControl"
 import WebSearchPanel from "./components/WebSearchPanel"
@@ -30,7 +30,7 @@ function App() {
           <Scene />
         </Suspense>
       </Canvas>
-      <Loader />
+      <LoadingScreen />
     </>
   )
 }

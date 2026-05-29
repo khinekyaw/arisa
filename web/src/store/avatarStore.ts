@@ -29,6 +29,11 @@ interface AvatarStore {
   setAudioPlaying: (playing: boolean) => void
   setAnimationPlaying: (playing: boolean) => void
 
+  // True while a reply is loading (request sent, avatar not yet speaking). Drives
+  // the looping "think" animation; useVRMAnimations watches it.
+  isThinking: boolean
+  setThinking: (thinking: boolean) => void
+
   // Arisa's spoken-voice output controls. The TTS audio is created in
   // useVRMLipSync (inside the Canvas), so the level lives here to be shared
   // with the control UI rendered outside the Canvas.
@@ -61,6 +66,8 @@ export const useAvatarStore = create<AvatarStore>((set, get) => ({
   isAudioPlaying: false,
   isAnimationPlaying: false,
   isIdle: true,
+  isThinking: false,
+  setThinking: (thinking) => set({ isThinking: thinking }),
 
   setAudioPlaying: (playing) => {
     set({ isAudioPlaying: playing })
