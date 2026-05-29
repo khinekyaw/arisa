@@ -19,7 +19,7 @@ function Scene() {
       {IS_DEBUG && <Stats />}
       <CameraControls
         ref={controls}
-        maxPolarAngle={Math.PI}
+        maxPolarAngle={Math.PI/1.8}
         minDistance={0.5}
         maxDistance={10}
       />
