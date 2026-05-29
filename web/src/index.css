@@ -8,7 +8,7 @@
 
 body {
   margin: 0;
-  background-image: linear-gradient(0deg, #0d071d 0%, #111129 100%);
+  background-image: linear-gradient(0deg, #ae99e7 0%, #8993e4 100%);
 }
 
 @import "tailwindcss";
@@ -203,6 +203,9 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  button {
+    @apply cursor-pointer;
+  }
 }
 
 @keyframes marquee {
@@ -212,6 +215,10 @@ body {
   to {
     transform: translateX(calc(var(--marquee-w, 0px) * -1));
   }
+}
+
+@utility glass-background {
+  @apply bg-white/5 backdrop-blur-2xl rounded-2xl border-2 border-white/10;
 }
 
 .animate-marquee {

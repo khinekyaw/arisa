@@ -156,8 +156,8 @@ const Chat: React.FC = () => {
             <li
               className={
                 isLive
-                  ? "bg-white/10 block backdrop-blur-2xl rounded-2xl border-2 border-white/10 px-3 py-1 w-fit max-w-full text-sm transition animate-in italic opacity-80"
-                  : "bg-white/5 block backdrop-blur-2xl rounded-2xl border-2 border-white/5 px-3 py-1 w-fit max-w-full text-sm transition animate-in"
+                  ? "glass-background block px-3 py-1 w-fit max-w-full text-sm transition animate-in italic opacity-80"
+                  : "glass-background block px-3 py-1 w-fit max-w-full text-sm transition animate-in"
               }
             >
               <MarqueeText text={bubbleText} />

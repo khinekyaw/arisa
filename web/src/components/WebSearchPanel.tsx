@@ -17,7 +17,7 @@ const WebSearchPanel = () => {
   if (!sources.length) return null
 
   return (
-    <div className="flex max-h-[35vh] min-h-0 flex-col rounded-2xl border-2 border-white/10 bg-white/10 px-3 py-3 text-white backdrop-blur-2xl transition animate-in fade-in slide-in-from-left-4 duration-300">
+    <div className="flex max-h-[35vh] min-h-0 flex-col glass-background px-3 py-3 text-white backdrop-blur-2xl transition animate-in fade-in slide-in-from-left-4 duration-300">
       <div className="mb-2 flex shrink-0 items-center justify-between opacity-70">
         <div className="flex items-center gap-2">
           <Globe size={14} />
