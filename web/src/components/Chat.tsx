@@ -36,8 +36,7 @@ interface ChatResponse {
   }
   animation: string
   expression: Record<string, number>
-  sources?: string[]
-  panel?: { title: string; items: string[] } | null
+  panel?: string | null
 }
 
 const Chat: React.FC = () => {
@@ -53,7 +52,6 @@ const Chat: React.FC = () => {
   const [replyHidden, setReplyHidden] = useState(false)
 
   const setValues = useAvatarStore((s) => s.setValues)
-  const setSources = useAvatarStore((s) => s.setSources)
   const setPanel = useAvatarStore((s) => s.setPanel)
   const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
   const interruptVoice = useAvatarStore((s) => s.interruptVoice)
@@ -82,7 +80,6 @@ const Chat: React.FC = () => {
           }
           setMessages((prev) => [...prev, { message: response.data.message }])
           setValues(response.data)
-          setSources(response.data.sources ?? [])
           setPanel(response.data.panel ?? null)
         }
       } finally {
@@ -91,7 +88,7 @@ const Chat: React.FC = () => {
         window.setTimeout(() => setPendingReply(false), REPLY_FALLBACK_MS)
       }
     },
-    [setValues, setSources, setPanel],
+    [setValues, setPanel],
   )
 
   const { phase, isListening, transcript, error, start, cancel } =

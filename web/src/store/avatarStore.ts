@@ -13,11 +13,6 @@ interface AvatarState {
   expression: Record<string, number>
 }
 
-export interface AnswerPanel {
-  title: string
-  items: string[]
-}
-
 interface AvatarStore {
   values: AvatarState | null
   setValues: (payload: AvatarState) => void
@@ -47,15 +42,11 @@ interface AvatarStore {
   voiceInterruptNonce: number
   interruptVoice: () => void
 
-  // Web search citations from the latest reply. Kept separate from `values` so
-  // they persist while the avatar goes idle, instead of being cleared.
-  sources: string[]
-  setSources: (sources: string[]) => void
-
-  // Optional on-screen list for long/list-like replies (the avatar only speaks
-  // a summary). Persists until the next reply or the user closes it.
-  panel: AnswerPanel | null
-  setPanel: (panel: AnswerPanel | null) => void
+  // Optional on-screen panel (limited HTML) for long/list-like replies or
+  // sources — the avatar only speaks a summary. Persists across idle until the
+  // next reply or the user closes it; kept out of `values` so it isn't cleared.
+  panel: string | null
+  setPanel: (panel: string | null) => void
 }
 
 export const useAvatarStore = create<AvatarStore>((set, get) => ({
@@ -93,9 +84,6 @@ export const useAvatarStore = create<AvatarStore>((set, get) => ({
   voiceInterruptNonce: 0,
   interruptVoice: () =>
     set((s) => ({ voiceInterruptNonce: s.voiceInterruptNonce + 1 })),
-
-  sources: [],
-  setSources: (sources) => set({ sources }),
 
   panel: null,
   setPanel: (panel) => set({ panel }),

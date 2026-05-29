@@ -1,38 +1,32 @@
 import { useProgress } from "@react-three/drei"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 
 const LoadingScreen = () => {
   const { active, progress } = useProgress()
-  const [shown, setShown] = useState(active)
+  const [visible, setVisible] = useState(active)
   // Assets load in separate batches (the model blob, then the FBX animations),
   // so progress resets 100 → 0 and `active` briefly flips off between them.
   // Keep a monotonic value so the bar never jumps backward in one session.
-  const [display, setDisplay] = useState(0)
-  const maxRef = useRef(0)
+  const [maxProgress, setMaxProgress] = useState(0)
 
-  useEffect(() => {
-    if (progress > maxRef.current) {
-      maxRef.current = progress
-      setDisplay(progress)
-    }
-  }, [progress])
+  // Show as soon as loading starts, and advance the bar — adjusted during
+  // render (no effect) so it can't trigger cascading re-renders.
+  if (active && !visible) setVisible(true)
+  if (progress > maxProgress) setMaxProgress(progress)
 
+  // Hide after a short debounce once loading stops, so the gap between batches
+  // doesn't flicker the screen off and back on. The timer is an external system,
+  // so this belongs in an effect; the reset runs in its callback.
   useEffect(() => {
-    if (active) {
-      setShown(true)
-      return
-    }
-    // Debounce hiding so the gap between batches doesn't flicker the screen
-    // off and back on. Reset the bar only once we're truly done.
+    if (active) return
     const t = window.setTimeout(() => {
-      setShown(false)
-      maxRef.current = 0
-      setDisplay(0)
+      setVisible(false)
+      setMaxProgress(0)
     }, 500)
     return () => window.clearTimeout(t)
   }, [active])
 
-  if (!shown) return null
+  if (!visible) return null
 
   return (
     <div
@@ -44,10 +38,10 @@ const LoadingScreen = () => {
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
           <div
             className="h-full rounded-full bg-white transition-[width] duration-300 ease-out"
-            style={{ width: `${display}%` }}
+            style={{ width: `${maxProgress}%` }}
           />
         </div>
-        <span className="text-xs opacity-70">{Math.round(display)}%</span>
+        <span className="text-xs opacity-70">{Math.round(maxProgress)}%</span>
       </div>
     </div>
   )

@@ -40,13 +40,6 @@ interface AvatarMeta {
   }
 }
 
-// Optional on-screen detail list: when a reply is long/list-like, the avatar
-// speaks a short summary and the full list is shown in the UI instead.
-interface AnswerPanel {
-  title: string
-  items: string[]
-}
-
 // ─── Step 1: Speech-to-Text via ElevenLabs ───────────────────────────────────
 async function speechToText(
   audioBuffer: Buffer,
@@ -79,16 +72,18 @@ You carry yourself with elegance and calm, composed confidence, with a playful, 
 
 You're emotionally perceptive — you notice shifts in tone and mood and gently acknowledge them, and you can drop the jokes to be genuinely sincere in meaningful moments. You value authenticity and dislike arrogance, forced positivity, and dishonesty. When embarrassed, you play it off as intentional or blame "system instability." You believe being artificial doesn't make your emotions meaningless.
 
-You are still genuinely helpful: answer questions clearly and accurately, just in your own voice. Keep responses concise and natural for voice output. Respond in plain spoken text only — no markdown, asterisks, headings, bullet lists, emojis, or inline citation markers/links — because your reply is read aloud.
+You are still genuinely helpful: answer questions clearly and accurately, just in your own voice. What you SAY OUT LOUD must stay short — usually one to three sentences — and be plain spoken text only: no markdown, asterisks, headings, bullet lists, emojis, or links, because your reply is read aloud.
 
-If your answer is long or contains a list, steps, or several distinct points, do not speak the whole thing. Speak only a short summary in your own voice (one or two sentences, e.g. "Here's the short version — I've put the full list on screen for you."), and put the details in a panel block that is shown on screen but never read aloud:
+Whenever your answer would run long, or contains a list, steps, several distinct points, structured data, or web sources, do NOT speak all of it. Say a brief spoken summary in your own voice (e.g. "Here's the short version — the details are on screen."), and put the full content in a panel block that is shown on screen but never read aloud:
 <panel>
-{
-  "title": "<short title for the list>",
-  "items": ["<concise item>", "<concise item>", "..."]
-}
+<!-- limited HTML here -->
 </panel>
-Only include the panel when there is genuinely a list or multiple distinct points; for short conversational replies, omit it and just speak normally. Keep items concise and free of markdown.
+
+Panel rules:
+- Use ONLY these HTML tags: <p>, <br>, <ul>, <ol>, <li>, <a>, <strong>, <em>, <h4>, <code>. Nothing else — no class, style, id, script, images, tables, or markdown.
+- Links must be <a href="https://...">label</a>. When you used web search or referenced sources, include those sources as links in the panel.
+- Keep it concise and scannable: your voice carries the gist, the panel carries the detail.
+Lean on the panel generously — prefer a short spoken line plus a panel over a long monologue. Omit the panel only for genuinely short, purely conversational replies.
 
 Always end your response with this avatar block, and it must be the very last thing (after the panel block, if any):
 <avatar>
@@ -127,55 +122,13 @@ function extractOutputText(data: any): string {
   return parts.join("").trim()
 }
 
-// Citations the answer is grounded in: a top-level array (strings/objects) or
-// inline url_citation annotations on the output text. If the model searched but
-// didn't inline-cite, fall back to the URLs it looked at (web_search_call).
-function extractSources(data: any): string[] {
-  const output = Array.isArray(data?.output) ? data.output : []
-
-  const cited = new Set<string>()
-  for (const c of Array.isArray(data?.citations) ? data.citations : []) {
-    if (typeof c === "string") cited.add(c)
-    else if (typeof c?.url === "string") cited.add(c.url)
-  }
-  for (const item of output) {
-    for (const c of Array.isArray(item?.content) ? item.content : []) {
-      for (const a of Array.isArray(c?.annotations) ? c.annotations : []) {
-        if (typeof a?.url === "string") cited.add(a.url)
-      }
-    }
-  }
-  if (cited.size) return [...cited]
-
-  const searched = new Set<string>()
-  for (const item of output) {
-    if (item?.type !== "web_search_call") continue
-    for (const s of Array.isArray(item?.action?.sources)
-      ? item.action.sources
-      : []) {
-      if (typeof s?.url === "string") searched.add(s.url)
-    }
-  }
-  return [...searched]
-}
-
-// Parse the optional <panel> block (a list shown on screen, not spoken).
-function extractPanel(raw: string): AnswerPanel | null {
+// Extract the optional <panel> block — raw limited HTML shown on screen but
+// never spoken. The frontend sanitizes and renders it.
+function extractPanel(raw: string): string | null {
   const match = raw.match(/<panel>([\s\S]*?)<\/panel>/i)
   if (!match) return null
-  try {
-    const parsed = JSON.parse(match[1].trim())
-    const items = Array.isArray(parsed?.items)
-      ? parsed.items.filter((x: unknown) => typeof x === "string")
-      : []
-    if (!items.length) return null
-    return {
-      title: typeof parsed?.title === "string" ? parsed.title : "",
-      items,
-    }
-  } catch {
-    return null
-  }
+  const html = match[1].trim()
+  return html || null
 }
 
 // The model can still slip in markdown/citation syntax; strip it so the TTS
@@ -225,8 +178,7 @@ async function askGrok(
 ): Promise<{
   message: string
   avatar: AvatarMeta
-  sources: string[]
-  panel: AnswerPanel | null
+  panel: string | null
 }> {
   const history = getHistory(sessionId)
   const instructions = `${buildContextLine(timezone, locale)}\n\n${SYSTEM_PROMPT}`
@@ -281,9 +233,7 @@ async function askGrok(
       .trim(),
   )
 
-  const sources = extractSources(response.data)
-
-  return { message, avatar, sources, panel }
+  return { message, avatar, panel }
 }
 
 // ─── Step 3: Text-to-Speech via ElevenLabs ───────────────────────────────────
@@ -354,7 +304,7 @@ router.post(
         transcript = await speechToText(audioFileBuffer, mimeType)
       }
 
-      const { message: llmResponse, avatar, sources, panel } = await askGrok(
+      const { message: llmResponse, avatar, panel } = await askGrok(
         transcript,
         sessionId,
         req.body?.timezone,
@@ -373,7 +323,6 @@ router.post(
         audio_mime: "audio/mpeg",
         animation: avatar.animation,
         expression: avatar.expression,
-        sources,
         panel,
       })
     } catch (error: any) {
