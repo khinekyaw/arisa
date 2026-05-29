@@ -3,7 +3,9 @@
 @import "shadcn/tailwind.css";
 
 #root {
-  @apply w-screen h-screen;
+  @apply w-screen;
+  height: 100vh;
+  height: 100dvh;
 }
 
 body {

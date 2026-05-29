@@ -149,7 +149,7 @@ const Chat: React.FC = () => {
   const isLive = isListening || pendingReply
 
   return (
-    <div className="fixed bottom-6 w-125 z-50 -translate-x-1/2 left-1/2 text-sm">
+    <div className="fixed bottom-4 sm:bottom-6 w-[calc(100vw-1.5rem)] max-w-125 z-50 -translate-x-1/2 left-1/2 text-sm">
       <div>
         <ul className="flex flex-col gap-1 text-white">
           {bubbleText && (

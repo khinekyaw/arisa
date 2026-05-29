@@ -12,7 +12,7 @@ function App() {
   return (
     <>
       <BgmControl />
-      <div className="fixed left-6 top-5 z-50 flex max-h-[calc(100vh-2.5rem)] w-72 flex-col gap-3 text-sm">
+      <div className="fixed left-3 top-16 z-40 flex max-h-[calc(100dvh-12rem)] w-[calc(100vw-1.5rem)] max-w-72 flex-col gap-3 text-sm sm:left-6 sm:top-5 sm:z-50 sm:max-h-[calc(100dvh-2.5rem)] sm:w-72">
         <WebSearchPanel />
         <DetailPanel />
       </div>
