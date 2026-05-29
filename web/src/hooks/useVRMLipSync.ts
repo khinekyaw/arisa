@@ -47,6 +47,8 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
   const setAudioPlaying = useAvatarStore((s) => s.setAudioPlaying)
   const voiceVolume = useAvatarStore((s) => s.voiceVolume)
   const voiceMuted = useAvatarStore((s) => s.voiceMuted)
+  const voiceInterruptNonce = useAvatarStore((s) => s.voiceInterruptNonce)
+  const didMountRef = useRef(false)
 
   // Whenever store gets a new speech payload, play it
   useEffect(() => {
@@ -78,6 +80,17 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
       audioRef.current.volume = voiceMuted ? 0 : voiceVolume
     }
   }, [voiceVolume, voiceMuted])
+
+  // Barge-in: stop the current utterance the moment the user interrupts.
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    audioRef.current?.pause()
+    audioRef.current = null
+    setAudioPlaying(false)
+  }, [voiceInterruptNonce, setAudioPlaying])
 
   useFrame((_, delta) => {
     const mgr = vrm?.expressionManager

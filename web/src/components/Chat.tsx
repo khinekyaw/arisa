@@ -56,6 +56,7 @@ const Chat: React.FC = () => {
   const setSources = useAvatarStore((s) => s.setSources)
   const setPanel = useAvatarStore((s) => s.setPanel)
   const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
+  const interruptVoice = useAvatarStore((s) => s.interruptVoice)
 
   // Persisted across reloads so the backend keeps conversation memory.
   const sessionIdRef = useRef<string | undefined>(
@@ -111,15 +112,21 @@ const Chat: React.FC = () => {
     return () => clearTimeout(t)
   }, [isAudioPlaying, isListening, pendingReply])
 
-  // Continuous loop: re-arm the mic only when idle, not awaiting a reply, and
-  // the avatar is NOT speaking — so its voice can never feed back into STT.
+  // Continuous loop: re-arm the mic whenever idle and not awaiting a reply,
+  // INCLUDING while Arisa is speaking, so the user can barge in. Mic echo
+  // cancellation keeps her own voice from feeding back into STT.
   useEffect(() => {
     if (!convoActive) return
     if (phase !== "idle") return
     if (pendingReply) return
-    if (isAudioPlaying) return
     void start()
   }, [convoActive, phase, pendingReply, isAudioPlaying, start])
+
+  // Barge-in: once VAD confirms the user is speaking while Arisa is talking,
+  // cut her off so this new turn takes over.
+  useEffect(() => {
+    if (isAudioPlaying && phase === "speaking") interruptVoice()
+  }, [isAudioPlaying, phase, interruptVoice])
 
   // Stop the loop on errors (e.g. mic permission denied) to avoid retry storms.
   useEffect(() => {

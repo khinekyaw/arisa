@@ -37,6 +37,11 @@ interface AvatarStore {
   setVoiceVolume: (volume: number) => void
   setVoiceMuted: (muted: boolean) => void
 
+  // Bumped to cut Arisa off mid-utterance (barge-in). useVRMLipSync watches
+  // this and stops the playing audio.
+  voiceInterruptNonce: number
+  interruptVoice: () => void
+
   // Web search citations from the latest reply. Kept separate from `values` so
   // they persist while the avatar goes idle, instead of being cleared.
   sources: string[]
@@ -77,6 +82,10 @@ export const useAvatarStore = create<AvatarStore>((set, get) => ({
   voiceMuted: false,
   setVoiceVolume: (volume) => set({ voiceVolume: volume }),
   setVoiceMuted: (muted) => set({ voiceMuted: muted }),
+
+  voiceInterruptNonce: 0,
+  interruptVoice: () =>
+    set((s) => ({ voiceInterruptNonce: s.voiceInterruptNonce + 1 })),
 
   sources: [],
   setSources: (sources) => set({ sources }),
