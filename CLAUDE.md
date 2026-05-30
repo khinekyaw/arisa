@@ -42,7 +42,7 @@ See `AGENT.md` for full architecture. Key files:
 ## Env Files
 
 - `web/.env` — `VITE_DEBUG`, `VITE_API_URL`, `VITE_WS_URL`
-- `backend/.env` — `PORT`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL_ID`, `XAI_API_KEY`, `CLIENT_ORIGIN`, `DATABASE_PATH`
+- `backend/.env` — `PORT`, `TTS_PROVIDER`, `STT_PROVIDER`, `XAI_API_KEY`, `XAI_TTS_VOICE`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL_ID`, `CLIENT_ORIGIN`, `DATABASE_PATH`
 
 Both are gitignored. Use `.env.example` as template.
 
@@ -55,7 +55,8 @@ Both are gitignored. Use `.env.example` as template.
 - The LLM system prompt in `voiceRoute.ts` defines the `<avatar>` JSON format — keep it in sync with the `AvatarMeta` interface
 - Conversation memory is SQLite (`better-sqlite3`) via `services/history.ts`; `getHistory` is a sliding window (last `DEFAULT_HISTORY_LIMIT` messages), full history stays persisted. Frontend must send `session_id` (stored in `localStorage` as `arisa_session_id`) for memory to work
 - `better-sqlite3` is a native module — reinstall (`npm install`) after Node version changes or it will fail to load
-- The transcription WS proxy must keep `ELEVENLABS_API_KEY` server-side — never send it to the browser
+- The transcription WS proxy must keep `ELEVENLABS_API_KEY`/`XAI_API_KEY` server-side — never send it to the browser
+- Voice providers are toggleable per-channel via `TTS_PROVIDER`/`STT_PROVIDER` (`xai` default, `elevenlabs` fallback). TTS and batch STT dispatch in `voiceRoute.ts`; realtime STT in `transcribeSocket.ts`. The browser always speaks the ElevenLabs-style WS protocol (`input_audio_chunk` ⇄ `partial_transcript`/`committed_transcript`); for xAI the proxy translates that to/from xAI's binary frames + `transcript.partial`/`transcript.done`, so the frontend is provider-agnostic — don't add provider logic to `useStreamingTranscription.ts`
 - Voice input is hands-free and continuous: the mic button toggles `convoActive` in `Chat.tsx`. Client-side VAD in `useStreamingTranscription.ts` transcribes on speech onset and auto-sends to `/api/chat` after trailing silence; the loop re-arms each turn. The batch STT path in `voiceRoute.ts` remains for direct audio POSTs
 - Barge-in: the mic re-arms even while Arisa's TTS is playing so the user can interrupt. This relies on `getUserMedia` `echoCancellation` (set in `useStreamingTranscription.ts`) so her own voice doesn't feed back into STT. When VAD confirms user speech (`phase === "speaking"`) during playback, `Chat.tsx` calls `interruptVoice()` and `useVRMLipSync.ts` stops the audio. If Arisa cuts herself off (e.g. loud speakers, weak AEC), raise `speechThreshold`
 - VAD thresholds (`speechThreshold`, `silenceThreshold`, `silenceMs`) are tunable options on `useStreamingTranscription`; defaults are mic-dependent and may need adjusting

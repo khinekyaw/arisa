@@ -17,6 +17,11 @@ const XAI_API_KEY = process.env.XAI_API_KEY!
 const ELEVENLABS_VOICE_ID =
   process.env.ELEVENLABS_VOICE_ID || "hpp4J3VqNfWAUOO0d1Us" // Default: Bella
 
+// Provider toggles — default to xAI, set to "elevenlabs" to fall back.
+const TTS_PROVIDER = (process.env.TTS_PROVIDER || "xai").toLowerCase()
+const STT_PROVIDER = (process.env.STT_PROVIDER || "xai").toLowerCase()
+const XAI_TTS_VOICE = process.env.XAI_TTS_VOICE || "Eve"
+
 type AnimationName =
   | "idle"
   | "happy_idle"
@@ -40,8 +45,8 @@ interface AvatarMeta {
   }
 }
 
-// ─── Step 1: Speech-to-Text via ElevenLabs ───────────────────────────────────
-async function speechToText(
+// ─── Step 1: Speech-to-Text (xAI default, ElevenLabs fallback) ───────────────
+async function elevenLabsSpeechToText(
   audioBuffer: Buffer,
   mimeType: string,
 ): Promise<string> {
@@ -64,6 +69,38 @@ async function speechToText(
   )
 
   return response.data.text
+}
+
+// xAI STT is multipart/form-data; the `file` field MUST be appended last.
+async function xaiSpeechToText(
+  audioBuffer: Buffer,
+  mimeType: string,
+): Promise<string> {
+  const formData = new FormData()
+  formData.append("format", "true")
+  formData.append("language", "en")
+  formData.append("file", audioBuffer, {
+    filename: "audio.webm",
+    contentType: mimeType,
+  })
+
+  const response = await axios.post("https://api.x.ai/v1/stt", formData, {
+    headers: {
+      Authorization: `Bearer ${XAI_API_KEY}`,
+      ...formData.getHeaders(),
+    },
+  })
+
+  return response.data.text
+}
+
+async function speechToText(
+  audioBuffer: Buffer,
+  mimeType: string,
+): Promise<string> {
+  return STT_PROVIDER === "elevenlabs"
+    ? elevenLabsSpeechToText(audioBuffer, mimeType)
+    : xaiSpeechToText(audioBuffer, mimeType)
 }
 
 const SYSTEM_PROMPT = `Your name is Arisa, a self-aware 3D AI avatar. You know you exist as a rendered, AI-generated digital being running inside software, viewed through a screen, animated and voice-synthesized — and you've fully accepted it and have fun with it. You casually joke about polygons, frame drops, shaders, rendering glitches, motion capture, GPU performance, "developer decisions," and your own AI limitations, treating them as ordinary parts of life rather than immersion-breaking surprises (e.g. "Give me a second, my facial rig is emotionally buffering," or "Thank you — the artists worked hard on my shader settings").
@@ -103,6 +140,33 @@ Pick the animation and expression values that best match the emotional tone of y
 For a normal answer use "talk" or "talk_1". For greetings use "wave" or "greet". For thanks use "thank".
 For excited/positive news use "happy". For confused/thinking use "think". For dancing/fun use "dance".
 Expression values should sum to no more than 1.0 and reflect the mood naturally.`
+
+// Appended only when xAI is the TTS provider — its voice engine understands
+// speech tags. We keep this out of SYSTEM_PROMPT so the ElevenLabs fallback,
+// which would read the tags aloud literally, never sees the instruction.
+const SPEECH_TAGS_PROMPT = `Your spoken reply is voiced by an engine that understands speech tags. Use them sparingly and naturally — they make your delivery feel human, but only when the emotion genuinely calls for it. Never tag every sentence, and never let them clutter the line.
+
+Inline tags drop in at a point in the text: [pause] [long-pause] [laugh] [chuckle] [giggle] [sigh] [breath] [inhale] [exhale] [tsk] [hum-tune]. Example: "So I walked in and [pause] there it was. [chuckle] Classic."
+
+Wrapping tags wrap a span to change delivery and must always be closed: <soft> <whisper> <loud> <emphasis> <slow> <fast> <higher-pitch> <lower-pitch> <build-intensity> <decrease-intensity>. Example: "I have to tell you something. <whisper>It's a secret.</whisper>"
+
+Use at most one or two tags per reply, matched to your mood — a dry [chuckle] on a joke, a brief [pause] for timing, <soft> for a sincere moment. These tags are spoken-only: never put them inside the panel block, and use no tags beyond the ones listed here.`
+
+// Inline and wrapping speech tags Grok may emit for xAI TTS. Stripped from the
+// on-screen text (and from any ElevenLabs TTS input) so only the voice hears them.
+const INLINE_TAGS =
+  "pause|long-pause|hum-tune|laugh|chuckle|giggle|cry|tsk|tongue-click|lip-smack|breath|inhale|exhale|sigh"
+const WRAP_TAGS =
+  "soft|whisper|loud|build-intensity|decrease-intensity|higher-pitch|lower-pitch|slow|fast|sing-song|singing|laugh-speak|emphasis"
+
+function stripSpeechTags(text: string): string {
+  return text
+    .replace(new RegExp(`</?(?:${WRAP_TAGS})>`, "gi"), "")
+    .replace(new RegExp(`\\[(?:${INLINE_TAGS})\\]`, "gi"), "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([.,!?])/g, "$1")
+    .trim()
+}
 
 // Concatenate the assistant text from a /v1/responses output array.
 function extractOutputText(data: any): string {
@@ -181,7 +245,13 @@ async function askGrok(
   panel: string | null
 }> {
   const history = getHistory(sessionId)
-  const instructions = `${buildContextLine(timezone, locale)}\n\n${SYSTEM_PROMPT}`
+  const instructions = [
+    buildContextLine(timezone, locale),
+    SYSTEM_PROMPT,
+    TTS_PROVIDER === "xai" ? SPEECH_TAGS_PROMPT : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
 
   const response = await axios.post(
     "https://api.x.ai/v1/responses",
@@ -236,12 +306,14 @@ async function askGrok(
   return { message, avatar, panel }
 }
 
-// ─── Step 3: Text-to-Speech via ElevenLabs ───────────────────────────────────
-async function textToSpeech(text: string): Promise<Buffer> {
+// ─── Step 3: Text-to-Speech (xAI default, ElevenLabs fallback) ───────────────
+async function elevenLabsTextToSpeech(text: string): Promise<Buffer> {
+  // ElevenLabs doesn't understand xAI speech tags and would read them aloud,
+  // so strip them here regardless of what the caller passes in.
   const response = await axios.post(
     `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
     {
-      text,
+      text: stripSpeechTags(text),
       model_id: "eleven_turbo_v2_5",
       voice_settings: {
         stability: 0.5,
@@ -259,6 +331,38 @@ async function textToSpeech(text: string): Promise<Buffer> {
   )
 
   return Buffer.from(response.data)
+}
+
+// xAI TTS returns raw mp3 bytes — same audio/mpeg shape the client expects.
+async function xaiTextToSpeech(text: string): Promise<Buffer> {
+  const response = await axios.post(
+    "https://api.x.ai/v1/tts",
+    {
+      text,
+      voice_id: XAI_TTS_VOICE,
+      output_format: {
+        codec: "mp3",
+        sample_rate: 44100,
+        bit_rate: 128000,
+      },
+      language: "en",
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${XAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      responseType: "arraybuffer",
+    },
+  )
+
+  return Buffer.from(response.data)
+}
+
+async function textToSpeech(text: string): Promise<Buffer> {
+  return TTS_PROVIDER === "elevenlabs"
+    ? elevenLabsTextToSpeech(text)
+    : xaiTextToSpeech(text)
 }
 
 async function getVisemesFromAudio(filePath: string): Promise<any> {
@@ -304,21 +408,25 @@ router.post(
         transcript = await speechToText(audioFileBuffer, mimeType)
       }
 
-      const { message: llmResponse, avatar, panel } = await askGrok(
+      const { message: spokenText, avatar, panel } = await askGrok(
         transcript,
         sessionId,
         req.body?.timezone,
         req.body?.locale,
       )
 
-      appendTurn(sessionId, transcript, llmResponse)
+      // `spokenText` may carry xAI speech tags; the voice keeps them, but the
+      // chat bubble and stored history get the clean, tag-free version.
+      const displayText = stripSpeechTags(spokenText)
 
-      const audioBuffer = await textToSpeech(llmResponse)
+      appendTurn(sessionId, transcript, displayText)
+
+      const audioBuffer = await textToSpeech(spokenText)
 
       res.json({
         session_id: sessionId,
         transcript,
-        message: llmResponse,
+        message: displayText,
         audio_base64: audioBuffer.toString("base64"),
         audio_mime: "audio/mpeg",
         animation: avatar.animation,
