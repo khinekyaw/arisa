@@ -2,6 +2,7 @@ import axios from "axios"
 import { Disc, Mic, Send } from "lucide-react"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useStreamingTranscription } from "../hooks/useStreamingTranscription"
+import { dbg } from "../lib/debug"
 import { useAvatarStore } from "../store/avatarStore"
 import MarqueeText from "./MarqueeText"
 import { Button } from "./ui/button"
@@ -54,7 +55,6 @@ const Chat: React.FC = () => {
   const setValues = useAvatarStore((s) => s.setValues)
   const setPanel = useAvatarStore((s) => s.setPanel)
   const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
-  const interruptVoice = useAvatarStore((s) => s.interruptVoice)
   const setThinking = useAvatarStore((s) => s.setThinking)
 
   // Persisted across reloads so the backend keeps conversation memory.
@@ -64,6 +64,7 @@ const Chat: React.FC = () => {
 
   const sendText = useCallback(
     async (text: string) => {
+      dbg("sendText ->", JSON.stringify(text))
       setMessages((prev) => [...prev, { message: text, fromUser: true }])
       setPendingReply(true)
       try {
@@ -115,21 +116,17 @@ const Chat: React.FC = () => {
     return () => clearTimeout(t)
   }, [isAudioPlaying, isListening, pendingReply])
 
-  // Continuous loop: re-arm the mic whenever idle and not awaiting a reply,
-  // INCLUDING while Arisa is speaking, so the user can barge in. Mic echo
-  // cancellation keeps her own voice from feeding back into STT.
+  // Continuous loop: re-arm the mic whenever idle and not awaiting a reply.
+  // Barge-in is disabled — the mic stays off while Arisa is speaking so her own
+  // voice can't trip the VAD and cut her off; it re-arms once playback ends.
   useEffect(() => {
     if (!convoActive) return
     if (phase !== "idle") return
     if (pendingReply) return
+    if (isAudioPlaying) return
+    dbg("re-arm -> start")
     void start()
   }, [convoActive, phase, pendingReply, isAudioPlaying, start])
-
-  // Barge-in: once VAD confirms the user is speaking while Arisa is talking,
-  // cut her off so this new turn takes over.
-  useEffect(() => {
-    if (isAudioPlaying && phase === "speaking") interruptVoice()
-  }, [isAudioPlaying, phase, interruptVoice])
 
   // Stop the loop on errors (e.g. mic permission denied) to avoid retry storms.
   useEffect(() => {

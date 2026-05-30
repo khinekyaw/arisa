@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { readSetting, SETTINGS_KEYS, writeSetting } from "../lib/settings"
 
 interface AvatarState {
   audio_base64: string
@@ -76,10 +77,17 @@ export const useAvatarStore = create<AvatarStore>((set, get) => ({
     if (idle) clearValues()
   },
 
-  voiceVolume: 1,
-  voiceMuted: false,
-  setVoiceVolume: (volume) => set({ voiceVolume: volume }),
-  setVoiceMuted: (muted) => set({ voiceMuted: muted }),
+  // Restored from localStorage so the user's level/mute persists across visits.
+  voiceVolume: readSetting(SETTINGS_KEYS.voiceVolume, 1),
+  voiceMuted: readSetting(SETTINGS_KEYS.voiceMuted, false),
+  setVoiceVolume: (volume) => {
+    writeSetting(SETTINGS_KEYS.voiceVolume, volume)
+    set({ voiceVolume: volume })
+  },
+  setVoiceMuted: (muted) => {
+    writeSetting(SETTINGS_KEYS.voiceMuted, muted)
+    set({ voiceMuted: muted })
+  },
 
   voiceInterruptNonce: 0,
   interruptVoice: () =>

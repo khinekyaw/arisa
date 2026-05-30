@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { dbg } from "../lib/debug"
 
 const WS_URL =
   import.meta.env.VITE_WS_URL ?? "ws://localhost:3001/api/transcribe"
@@ -146,10 +147,12 @@ export function useStreamingTranscription(
 
     switch (msg.message_type) {
       case "partial_transcript":
+        dbg("partial_transcript ->", JSON.stringify(msg.text))
         partialRef.current = msg.text ?? ""
         setTranscript(fullText())
         break
       case "committed_transcript":
+        dbg("committed_transcript ->", JSON.stringify(msg.text))
         committedRef.current = `${committedRef.current} ${msg.text ?? ""}`.trim()
         partialRef.current = ""
         setTranscript(fullText())
@@ -206,6 +209,7 @@ export function useStreamingTranscription(
     endingRef.current = true
     const text = await finalizeTurn()
     setPhaseBoth("idle")
+    dbg("endTurn -> text=", JSON.stringify(text), "| sending:", Boolean(text))
     if (text) onTurnEndRef.current?.(text)
   }, [finalizeTurn, setPhaseBoth])
 
@@ -222,6 +226,7 @@ export function useStreamingTranscription(
   const start = useCallback(async () => {
     // Guard against double-arming (e.g. the continuous-mode re-arm effect).
     if (phaseRef.current !== "idle") return
+    dbg("start -> arming mic")
     setError(null)
     setTranscript("")
     resetState()
@@ -251,6 +256,12 @@ export function useStreamingTranscription(
       })
       ws.onmessage = (e) => handleMessage(e.data)
       ws.onclose = () => {
+        dbg(
+          "ws.onclose | phase=",
+          phaseRef.current,
+          "ending=",
+          endingRef.current,
+        )
         if (phaseRef.current !== "idle" && !endingRef.current) {
           setPhaseBoth("idle")
         }
@@ -278,6 +289,7 @@ export function useStreamingTranscription(
 
           if (voicedFramesRef.current >= DEFAULTS.minVoicedFrames) {
             speechStartedRef.current = true
+            dbg("onset -> speaking (rms=", rms.toFixed(3), ")")
             silenceSecondsRef.current = 0
             if (armTimerRef.current !== null) {
               clearTimeout(armTimerRef.current)

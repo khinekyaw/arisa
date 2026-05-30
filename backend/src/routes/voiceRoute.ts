@@ -230,7 +230,13 @@ function buildContextLine(timezone?: string, locale?: string): string {
     // plain server-local stamp rather than failing the whole turn.
     now = new Date().toString()
   }
-  return `Current context: It is ${now}. The user's language is ${lang}. You already know the current date and time from this line, so answer date and time questions directly and never use web search for them.`
+  const tz = timezone
+    ? `The user's timezone is ${timezone} (${now.match(/GMT[+-]\d+/)?.[0] ?? ""}).`
+    : ""
+  return `Current context: It is ${now}. ${tz} The user's language is ${lang}. You already know the current date, time, and timezone from this line, so answer date, time, and timezone questions directly and never use web search for them.`.replace(
+    /\s+/g,
+    " ",
+  )
 }
 
 // ─── Step 2: LLM via xAI Grok (Agent Tools API + server-side web search) ─────

@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from "react"
+import { readSetting, SETTINGS_KEYS, writeSetting } from "../lib/settings"
 
 const BGM_SRC = "/sound/massobeats_noon.mp3"
 const DEFAULT_VOLUME = 0.08
 
 export function useBgm() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [enabled, setEnabled] = useState(true)
-  const [volume, setVolume] = useState(DEFAULT_VOLUME)
+  // Restored from localStorage so music on/off and level persist across visits.
+  const [enabled, setEnabled] = useState(() =>
+    readSetting(SETTINGS_KEYS.bgmEnabled, true),
+  )
+  const [volume, setVolume] = useState(() =>
+    readSetting(SETTINGS_KEYS.bgmVolume, DEFAULT_VOLUME),
+  )
 
   useEffect(() => {
     const audio = new Audio(BGM_SRC)
     audio.loop = true
-    audio.volume = DEFAULT_VOLUME
     audioRef.current = audio
     return () => {
       audio.pause()
@@ -19,11 +24,14 @@ export function useBgm() {
     }
   }, [])
 
+  // Owns the audio level: applies the restored/changed volume and persists it.
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume
+    writeSetting(SETTINGS_KEYS.bgmVolume, volume)
   }, [volume])
 
   useEffect(() => {
+    writeSetting(SETTINGS_KEYS.bgmEnabled, enabled)
     const audio = audioRef.current
     if (!audio) return
     if (!enabled) {

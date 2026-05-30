@@ -141,18 +141,29 @@ function bridgeXai(client: WebSocket): void {
     }
   })
 
-  // xAI delivers the final words in `transcript.partial` events flagged
-  // `is_final`; the closing `transcript.done` carries an empty `text`. So we
-  // accumulate the finalized segments here and emit them as the committed
-  // transcript ourselves, rather than trusting `transcript.done.text`.
-  let committed = ""
-  let lastInterim = ""
+  // xAI streams transcripts as time-stamped SEGMENTS. Each `transcript.partial`
+  // carries a `start` offset: interims refine the current segment's text and an
+  // `is_final` finalizes it, while a pause begins a NEW segment with a new
+  // `start`. The closing `transcript.done` carries an empty `text`. So we keep
+  // the latest text per segment `start` and join them in order. This is robust
+  // to xAI's quirks: a re-finalized segment overwrites by key (no duplicate
+  // line), every segment is preserved (no dropped sentence), and we still get a
+  // result from the interims when no `is_final` ever arrives.
+  const segments = new Map<number, string>()
+
+  const joinSegments = () =>
+    [...segments.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, t]) => t)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim()
 
   upstream.on("message", (data) => {
     let msg: {
       type?: string
       text?: string
-      is_final?: boolean
+      start?: number
       message?: string
     }
     try {
@@ -164,34 +175,30 @@ function bridgeXai(client: WebSocket): void {
 
     switch (msg.type) {
       case "transcript.partial": {
-        const text = msg.text ?? ""
-        if (msg.is_final) {
-          committed = `${committed} ${text}`.trim()
-          lastInterim = ""
-        } else {
-          lastInterim = text
+        const text = (msg.text ?? "").trim()
+        if (text) {
+          // Round to avoid float drift splitting one segment into two keys.
+          const start = Math.round((msg.start ?? 0) * 100) / 100
+          segments.set(start, text)
         }
-        // Show the running utterance (finalized + current interim) live.
         client.send(
           JSON.stringify({
             message_type: "partial_transcript",
-            text: `${committed} ${lastInterim}`.trim(),
+            text: joinSegments(),
           }),
         )
         break
       }
-      // End of utterance — its `text` is empty, so fall back to what we kept.
+      // End of utterance — `done.text` is empty, so join the segments we kept.
       case "transcript.done": {
-        const finalText =
-          (msg.text && msg.text.trim()) || committed || lastInterim
+        const finalText = (msg.text && msg.text.trim()) || joinSegments()
         client.send(
           JSON.stringify({
             message_type: "committed_transcript",
             text: finalText,
           }),
         )
-        committed = ""
-        lastInterim = ""
+        segments.clear()
         break
       }
       case "error":
