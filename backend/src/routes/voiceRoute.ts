@@ -5,6 +5,7 @@ import FormData from "form-data"
 import { readFile, unlink } from "fs/promises"
 import multer from "multer"
 import { promisify } from "util"
+import { chatPerDay, chatPerMinute } from "../middleware/rateLimit"
 import { data } from "../mock/data"
 import { appendTurn, ensureSession, getHistory } from "../services/history"
 
@@ -391,6 +392,8 @@ async function getVisemesFromAudio(filePath: string): Promise<any> {
 //   If omitted, a new session is created and the ID is returned in the response.
 router.post(
   "/chat",
+  chatPerMinute,
+  chatPerDay,
   upload.single("audio"),
   async (req: Request, res: Response) => {
     try {

@@ -41,8 +41,8 @@ See `AGENT.md` for full architecture. Key files:
 
 ## Env Files
 
-- `web/.env` — `VITE_DEBUG`, `VITE_API_URL`, `VITE_WS_URL`
-- `backend/.env` — `PORT`, `TTS_PROVIDER`, `STT_PROVIDER`, `XAI_API_KEY`, `XAI_TTS_VOICE`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL_ID`, `CLIENT_ORIGIN`, `DATABASE_PATH`
+- `web/.env` — `VITE_DEBUG` (universal). Dev-only `VITE_API_URL`/`VITE_WS_URL` live in `web/.env.development` (loaded by `vite dev`, NOT `vite build`) so production builds default to the same origin the app is served from. See `DEPLOY.md`
+- `backend/.env` — `PORT`, `TTS_PROVIDER`, `STT_PROVIDER`, `XAI_API_KEY`, `XAI_TTS_VOICE`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_STT_MODEL_ID`, `CLIENT_ORIGIN`, `DATABASE_PATH`, `TRUST_PROXY`, `STATIC_DIR`, `RATE_LIMIT_PER_MIN`, `RATE_LIMIT_PER_DAY`
 
 Both are gitignored. Use `.env.example` as template.
 
@@ -60,3 +60,5 @@ Both are gitignored. Use `.env.example` as template.
 - Voice input is hands-free and continuous: the mic button toggles `convoActive` in `Chat.tsx`. Client-side VAD in `useStreamingTranscription.ts` transcribes on speech onset and auto-sends to `/api/chat` after trailing silence; the loop re-arms each turn. The batch STT path in `voiceRoute.ts` remains for direct audio POSTs
 - Barge-in is currently DISABLED: the mic does not re-arm while Arisa's TTS is playing (the `if (isAudioPlaying) return` guard in the `Chat.tsx` re-arm effect), so she always finishes her reply before listening again. This prevents her own voice (residual echo past AEC) from tripping the VAD and cutting herself off. The interrupt plumbing is dormant but intact — `interruptVoice()`/`voiceInterruptNonce` in `avatarStore.ts` and the nonce-watching effect in `useVRMLipSync.ts` — so re-enabling means restoring the barge-in effect + removing that guard in `Chat.tsx`
 - VAD thresholds (`speechThreshold`, `silenceThreshold`, `silenceMs`) are tunable options on `useStreamingTranscription`; defaults are mic-dependent and may need adjusting
+- Single-host deploy: in production `index.ts` serves `web/dist` (via `STATIC_DIR`, default `../web/dist`) with an SPA fallback regex that excludes `/api/`. The transcription WS shares the origin. `app.set("trust proxy", TRUST_PROXY)` must match your proxy hop count or `req.ip` (and rate limiting) will be wrong. See `DEPLOY.md`
+- `POST /api/chat` is rate-limited per client IP (`middleware/rateLimit.ts`): `RATE_LIMIT_PER_MIN` (default 10) and `RATE_LIMIT_PER_DAY` (default 100), returning 429 over the cap. The limiters run before multer so floods are rejected before the upload/STT/LLM/TTS spend. The `/api/transcribe` WS is not yet rate-limited (origin-checked only)

@@ -9,7 +9,9 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3001/api/",
+  // Dev sets VITE_API_URL to the separate backend port; when unset (single-host
+  // production) fall back to a same-origin relative path.
+  baseURL: import.meta.env.VITE_API_URL ?? "/api/",
   timeout: 50000,
 })
 

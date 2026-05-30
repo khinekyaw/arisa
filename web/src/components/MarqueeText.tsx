@@ -31,10 +31,11 @@ const MarqueeText = ({
     return () => ro.disconnect()
   }, [text])
 
-  const marqueeStyle: CSSProperties = {
+  // Cast needed because CSS custom properties aren't in the CSSProperties type.
+  const marqueeStyle = {
     "--marquee-w": `${stride}px`,
     animationDuration: `${stride / MARQUEE_SPEED}s`,
-  }
+  } as CSSProperties
 
   return (
     <div

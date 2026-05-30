@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { dbg } from "../lib/debug"
 
-const WS_URL =
-  import.meta.env.VITE_WS_URL ?? "ws://localhost:3001/api/transcribe"
+// In dev, web/.env sets VITE_WS_URL to the separate backend port. When unset
+// (single-host production), derive it from the page origin so wss is used over
+// https automatically.
+function defaultWsUrl(): string {
+  if (typeof window === "undefined") return "ws://localhost:3001/api/transcribe"
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
+  return `${proto}//${window.location.host}/api/transcribe`
+}
+
+const WS_URL = import.meta.env.VITE_WS_URL ?? defaultWsUrl()
 
 // How long to wait after committing for ElevenLabs to flush the final segment.
 const FINAL_COMMIT_TIMEOUT = 2000
