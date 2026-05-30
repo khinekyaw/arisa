@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "concurrently -n backend,web -c blue,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix web\"",
-    "install:all": "npm install && npm install --prefix backend && npm install --prefix web"
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix web",
+    "build": "npm install --prefix web && npm run build --prefix web && npm install --prefix backend && npm run build --prefix backend",
+    "start": "npm start --prefix backend"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

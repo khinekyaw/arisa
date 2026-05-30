@@ -3,7 +3,38 @@
 The backend serves the built frontend, so the whole app runs as **one Node
 process on one origin**.
 
-## Build
+## Render (one service)
+
+The repo root has `build`/`start` scripts and a `render.yaml` Blueprint, so the
+whole single-host app runs as one Render web service. In the web-service form:
+
+| Field | Value |
+|---|---|
+| Language | Node |
+| Root Directory | *(leave blank — repo root)* |
+| Build Command | `npm run build` |
+| Start Command | `npm start` |
+| Branch | `master` |
+
+This project uses **npm**, not yarn — change the prefilled `yarn` / `yarn start`.
+
+Set these env vars in the Render dashboard:
+- `XAI_API_KEY` — your key (secret).
+- `CLIENT_ORIGIN` — this service's URL, e.g. `https://arisa.onrender.com` (CORS +
+  WS origin check). Set it after the first deploy gives you the URL.
+- `TRUST_PROXY=1`, `NODE_VERSION=22` (also in `.nvmrc` / Blueprint).
+- Optional: `TTS_PROVIDER`, `STT_PROVIDER`, `XAI_TTS_VOICE`, `RATE_LIMIT_*`.
+- Do **not** set `PORT` — Render injects it.
+
+Render serves HTTPS automatically (needed for the iOS mic) and supports the
+WebSocket (`/api/transcribe`). Health check path: `/api/health`.
+
+Caveats: the SQLite memory file is **ephemeral** on Render (resets on deploy/
+restart; free instances also sleep when idle) — add a paid disk and set
+`DATABASE_PATH` to persist it (see `render.yaml`). `better-sqlite3` is rebuilt
+during the build for Render's Linux/Node.
+
+## Build (manual / other hosts)
 
 ```bash
 # 1. Build the frontend (outputs web/dist)
@@ -64,6 +95,18 @@ location / {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
 ```
+
+## Mobile / iOS Safari
+
+- **HTTPS is required.** iOS Safari (and Chrome) only expose the microphone
+  (`getUserMedia`) in a secure context. The app must be served over `https://`
+  (or `localhost`) or the mic button errors out. Terminate TLS at your reverse
+  proxy / PaaS.
+- iOS ignores the requested 16kHz capture rate and records at the hardware rate
+  (usually 48kHz). The client reports its real rate per audio chunk and the STT
+  proxy mirrors it to xAI, so transcription works regardless — no config needed.
+- TTS audio and the mic are unlocked from the first tap (mic/send button). This
+  needs a real user gesture, which those buttons provide.
 
 ## Health check
 

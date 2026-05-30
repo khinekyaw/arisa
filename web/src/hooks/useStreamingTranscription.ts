@@ -241,6 +241,14 @@ export function useStreamingTranscription(
     setPhaseBoth("armed")
 
     try {
+      // iOS/Safari only exposes getUserMedia in a secure context (https or
+      // localhost). Fail with a clear message instead of a vague TypeError.
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          "Microphone needs a secure https connection. Open the site over https and allow mic access.",
+        )
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -250,8 +258,17 @@ export function useStreamingTranscription(
       })
       streamRef.current = stream
 
-      const ctx = new AudioContext({ sampleRate: 16000 })
+      // webkitAudioContext for older iOS Safari. iOS also ignores the requested
+      // sampleRate (records at the hardware rate) and starts the context
+      // suspended — resume it while still inside the mic gesture. The actual
+      // rate is read back below and sent per-chunk so the server can match it.
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext
+      const ctx = new AudioCtx({ sampleRate: 16000 })
       ctxRef.current = ctx
+      if (ctx.state === "suspended") await ctx.resume()
       sampleRateRef.current = ctx.sampleRate
       const frameSeconds = DEFAULTS.bufferSize / ctx.sampleRate
 
@@ -330,7 +347,16 @@ export function useStreamingTranscription(
         if (!speechStartedRef.current) cancel()
       }, DEFAULTS.armTimeoutMs)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Microphone access denied")
+      const name = (err as DOMException)?.name
+      const message =
+        name === "NotAllowedError"
+          ? "Microphone permission denied. Allow mic access in your browser settings, then try again."
+          : name === "NotFoundError"
+            ? "No microphone found."
+            : err instanceof Error
+              ? err.message
+              : "Microphone access failed"
+      setError(message)
       cancel()
     }
   }, [

@@ -7,6 +7,17 @@ import { useAvatarStore } from "../store/avatarStore"
 
 const lipsyncManager = new Lipsync()
 
+// iOS/Safari starts the Web Audio context suspended and only lets it resume
+// from inside a user gesture. The TTS audio routes through this lip-sync
+// context, so if it's still suspended when a reply plays (after the async
+// request, outside any gesture) the audio is silent. Call this from a tap
+// handler to unlock playback for the session.
+export function unlockAudioPlayback(): void {
+  const ctx = (lipsyncManager as unknown as { audioContext?: AudioContext })
+    .audioContext
+  if (ctx && ctx.state === "suspended") void ctx.resume()
+}
+
 const VISEME_TO_VRM: Partial<Record<VISEMES, VRMExpressionPresetName>> = {
   // Silence / closed mouth
   [VISEMES.sil]: undefined, // no expression = closed

@@ -2,6 +2,7 @@ import axios from "axios"
 import { Disc, Mic, Send } from "lucide-react"
 import React, { useCallback, useEffect, useRef, useState } from "react"
 import { useStreamingTranscription } from "../hooks/useStreamingTranscription"
+import { unlockAudioPlayback } from "../hooks/useVRMLipSync"
 import { dbg } from "../lib/debug"
 import { useAvatarStore } from "../store/avatarStore"
 import MarqueeText from "./MarqueeText"
@@ -150,11 +151,13 @@ const Chat: React.FC = () => {
     e.preventDefault()
     const text = input.trim()
     if (!text) return
+    unlockAudioPlayback() // iOS: unlock TTS playback within this tap
     setInput("")
     await sendText(text)
   }
 
   const toggleConversation = () => {
+    unlockAudioPlayback() // iOS: unlock TTS playback within this tap
     if (convoActive) {
       setConvoActive(false)
       cancel()

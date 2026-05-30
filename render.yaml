@@ -1,0 +1,47 @@
+# Render Blueprint for the single-host deploy (backend serves web/dist).
+# Deploy via Render → "New +" → "Blueprint", or use these values in the manual
+# web-service form. Render provides HTTPS automatically (required for the iOS mic).
+services:
+  - type: web
+    name: arisa
+    runtime: node
+    region: singapore
+    plan: free
+    branch: master
+    # rootDir is the repo root (this file lives there); leave it unset.
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: TRUST_PROXY # Render runs behind a proxy → real client IP for rate limiting
+        value: "1"
+      - key: TTS_PROVIDER
+        value: xai
+      - key: STT_PROVIDER
+        value: xai
+      - key: XAI_TTS_VOICE
+        value: Eve
+      - key: RATE_LIMIT_PER_MIN
+        value: "10"
+      - key: RATE_LIMIT_PER_DAY
+        value: "100"
+      # Secrets / per-deploy values — set in the Render dashboard, not in git:
+      - key: XAI_API_KEY
+        sync: false
+      # Must equal this service's public URL (CORS + WS origin check),
+      # e.g. https://arisa.onrender.com. Set after the first deploy.
+      - key: CLIENT_ORIGIN
+        sync: false
+
+# SQLite conversation memory is on the local disk, which is EPHEMERAL on Render
+# (resets on every deploy/restart, and free instances spin down when idle). To
+# persist it, upgrade to a paid plan and add a disk, then set DATABASE_PATH:
+#
+#    disk:
+#      name: data
+#      mountPath: /data
+#      sizeGB: 1
+#    # add to envVars:  - key: DATABASE_PATH
+#    #                    value: /data/arisa.db
