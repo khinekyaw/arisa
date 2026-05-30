@@ -2,14 +2,10 @@ import { create } from "zustand"
 import { readSetting, SETTINGS_KEYS, writeSetting } from "../lib/settings"
 
 interface AvatarState {
-  audio_base64: string
-  audio_mime: string
+  // Streaming TTS endpoint the audio element plays (GET /api/tts/:token).
+  audio_url: string
   message: string
   transcript: string
-  visemes: {
-    metadata: { duration: number }
-    mouthCues: { start: number; end: number; value: string }[]
-  }
   animation: string
   expression: Record<string, number>
 }

@@ -1,17 +1,16 @@
 import axios from "axios"
-import { exec } from "child_process"
 import { Request, Response, Router } from "express"
 import FormData from "form-data"
-import { readFile, unlink } from "fs/promises"
+import { readFile } from "fs/promises"
 import multer from "multer"
-import { promisify } from "util"
+import { WebSocket } from "ws"
 import { chatPerDay, chatPerMinute } from "../middleware/rateLimit"
 import { data } from "../mock/data"
 import { appendTurn, ensureSession, getHistory } from "../services/history"
+import { createTtsToken, getTtsText } from "../services/ttsTokens"
 
 const router = Router()
 const upload = multer({ dest: "/tmp/" })
-const execAsync = promisify(exec)
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY!
 const XAI_API_KEY = process.env.XAI_API_KEY!
@@ -340,49 +339,78 @@ async function elevenLabsTextToSpeech(text: string): Promise<Buffer> {
   return Buffer.from(response.data)
 }
 
-// xAI TTS returns raw mp3 bytes — same audio/mpeg shape the client expects.
-async function xaiTextToSpeech(text: string): Promise<Buffer> {
-  const response = await axios.post(
-    "https://api.x.ai/v1/tts",
-    {
-      text,
-      voice_id: XAI_TTS_VOICE,
-      output_format: {
-        codec: "mp3",
-        sample_rate: 44100,
-        bit_rate: 128000,
-      },
-      language: "en",
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${XAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      responseType: "arraybuffer",
-    },
-  )
+// Stream xAI TTS straight to an HTTP response so the browser starts playing
+// before synthesis finishes. NOTE: the streaming endpoint silently returns no
+// audio if `sample_rate`/`bit_rate` query params are set — pass only
+// language/voice/codec (output is 24kHz mp3). Messages use the `delta` field.
+function streamXaiTts(text: string, res: Response): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const url = `wss://api.x.ai/v1/tts?language=en&voice=${encodeURIComponent(
+      XAI_TTS_VOICE.toLowerCase(),
+    )}&codec=mp3`
+    const ws = new WebSocket(url, {
+      headers: { Authorization: `Bearer ${XAI_API_KEY}` },
+    })
+    let settled = false
+    const finish = (err?: Error) => {
+      if (settled) return
+      settled = true
+      if (ws.readyState === WebSocket.OPEN) ws.close()
+      err ? reject(err) : resolve()
+    }
 
-  return Buffer.from(response.data)
+    ws.on("open", () => {
+      ws.send(JSON.stringify({ type: "text.delta", delta: text }))
+      ws.send(JSON.stringify({ type: "text.done" }))
+    })
+    ws.on("message", (raw) => {
+      let msg: { type?: string; delta?: string }
+      try {
+        msg = JSON.parse(raw.toString())
+      } catch {
+        return
+      }
+      if (msg.type === "audio.delta" && msg.delta) {
+        res.write(Buffer.from(msg.delta, "base64"))
+      } else if (msg.type === "audio.done") {
+        finish()
+      }
+    })
+    ws.on("error", (err) => finish(err as Error))
+    ws.on("close", () => finish())
+    // If the client disconnects mid-stream, stop pulling audio we can't deliver.
+    res.on("close", () => finish())
+  })
 }
 
-async function textToSpeech(text: string): Promise<Buffer> {
-  return TTS_PROVIDER === "elevenlabs"
-    ? elevenLabsTextToSpeech(text)
-    : xaiTextToSpeech(text)
-}
+// ─── Streaming audio: GET /api/tts/:token ──────────────────────────────
+// The browser's <audio> element hits this; we pipe TTS audio as it generates.
+router.get("/tts/:token", async (req: Request, res: Response) => {
+  const text = getTtsText(String(req.params.token))
+  if (!text) {
+    res.status(404).json({ error: "Audio expired or not found." })
+    return
+  }
 
-async function getVisemesFromAudio(filePath: string): Promise<any> {
-  const jsonPath = `${filePath}.json`
+  res.setHeader("Content-Type", "audio/mpeg")
+  res.setHeader("Cache-Control", "no-store")
 
   try {
-    await execAsync(`rhubarb -f json -o "${jsonPath}" "${filePath}"`)
-    const json = await readFile(jsonPath, "utf-8")
-    return JSON.parse(json)
-  } finally {
-    await Promise.allSettled([unlink(filePath), unlink(jsonPath)])
+    if (TTS_PROVIDER === "elevenlabs") {
+      // ElevenLabs path stays batch — send the whole buffer at once.
+      res.end(await elevenLabsTextToSpeech(text))
+    } else {
+      await streamXaiTts(text, res)
+      res.end()
+    }
+  } catch (error: any) {
+    if (!res.headersSent) {
+      res.status(502).json({ error: "TTS failed", details: error?.message })
+    } else {
+      res.end()
+    }
   }
-}
+})
 
 // ─── Main Endpoint: POST /api/chat ─────────────────────────────────────
 // Accepts either:
@@ -430,13 +458,16 @@ router.post(
 
       appendTurn(sessionId, transcript, displayText)
 
-      const audioBuffer = await textToSpeech(spokenText)
+      // Hand the spoken text (with tags) to a token; the browser streams the
+      // audio from GET /api/tts/:token while this response returns now, so the
+      // visual reply and audio both arrive without waiting on full synthesis.
+      const audioToken = createTtsToken(spokenText)
 
       res.json({
         session_id: sessionId,
         transcript,
         message: displayText,
-        audio_base64: audioBuffer.toString("base64"),
+        audio_token: audioToken,
         audio_mime: "audio/mpeg",
         animation: avatar.animation,
         expression: avatar.expression,
@@ -454,7 +485,7 @@ router.post(
 router.post(
   "/chat/test",
   upload.single("audio"),
-  async (req: Request, res: Response) => {
+  async (_req: Request, res: Response) => {
     res.json(data[1])
   },
 )

@@ -29,17 +29,21 @@ const REPLY_FALLBACK_MS = 3000
 
 interface ChatResponse {
   session_id: string
-  audio_base64: string
-  audio_mime: string
+  audio_token: string
   message: string
   transcript: string
-  visemes: {
-    metadata: { duration: number }
-    mouthCues: { start: number; end: number; value: string }[]
-  }
   animation: string
   expression: Record<string, number>
   panel?: string | null
+}
+
+// The backend returns a token; the audio streams from GET /api/tts/:token.
+// Resolve against the page origin so it works for both the absolute dev API
+// base (http://localhost:3001/api/) and the relative prod base (/api/).
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api/"
+function buildAudioUrl(token: string): string {
+  const base = new URL(API_BASE, window.location.origin)
+  return new URL(`tts/${token}`, base).toString()
 }
 
 const Chat: React.FC = () => {
@@ -77,13 +81,20 @@ const Chat: React.FC = () => {
           locale: LOCALE,
         })
         if (response.data) {
-          if (response.data.session_id) {
-            sessionIdRef.current = response.data.session_id
-            localStorage.setItem(SESSION_KEY, response.data.session_id)
+          const data = response.data
+          if (data.session_id) {
+            sessionIdRef.current = data.session_id
+            localStorage.setItem(SESSION_KEY, data.session_id)
           }
-          setMessages((prev) => [...prev, { message: response.data.message }])
-          setValues(response.data)
-          setPanel(response.data.panel ?? null)
+          setMessages((prev) => [...prev, { message: data.message }])
+          setValues({
+            audio_url: data.audio_token ? buildAudioUrl(data.audio_token) : "",
+            message: data.message,
+            transcript: data.transcript,
+            animation: data.animation,
+            expression: data.expression,
+          })
+          setPanel(data.panel ?? null)
         }
       } finally {
         // Audio playback normally clears pendingReply; this guards replies

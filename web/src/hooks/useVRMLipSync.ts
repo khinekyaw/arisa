@@ -50,14 +50,17 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
   const voiceInterruptNonce = useAvatarStore((s) => s.voiceInterruptNonce)
   const didMountRef = useRef(false)
 
-  // Whenever store gets a new speech payload, play it
+  // Whenever store gets a new speech payload, stream and play it.
   useEffect(() => {
-    if (!avatarState?.audio_base64) return
+    if (!avatarState?.audio_url) return
 
     audioRef.current?.pause()
-    const audio = new Audio(
-      `data:${avatarState.audio_mime};base64,${avatarState.audio_base64}`,
-    )
+    const audio = new Audio()
+    // Set before src so the Web Audio lip-sync analysis works for the
+    // cross-origin dev case (backend on a different port); requires the
+    // server's CORS headers, which the /api routes send.
+    audio.crossOrigin = "anonymous"
+    audio.src = avatarState.audio_url
     const { voiceMuted, voiceVolume } = useAvatarStore.getState()
     audio.volume = voiceMuted ? 0 : voiceVolume
     audioRef.current = audio
@@ -65,12 +68,18 @@ export function useVRMLipSync(vrm: VRM | null | undefined, lerpSpeed = 16) {
 
     lipsyncManager.connectAudio(audio)
 
-    audio.addEventListener("play", () => setAudioPlaying(true))
-    audio.addEventListener("ended", () => setAudioPlaying(false))
+    // Use "playing" (audible playback begins after buffering), not "play"
+    // (fires the instant play() is called). With streamed audio there's a gap
+    // between the two, and the talking animation/lip-sync key off this flag, so
+    // they must wait for actual sound, not the request.
+    const onPlaying = () => setAudioPlaying(true)
+    const onEnded = () => setAudioPlaying(false)
+    audio.addEventListener("playing", onPlaying)
+    audio.addEventListener("ended", onEnded)
 
     return () => {
-      audio.removeEventListener("play", () => setAudioPlaying(true))
-      audio.removeEventListener("ended", () => setAudioPlaying(false))
+      audio.removeEventListener("playing", onPlaying)
+      audio.removeEventListener("ended", onEnded)
     }
   }, [avatarState])
 

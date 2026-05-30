@@ -154,6 +154,7 @@ export function useVRMAnimations(vrm: VRM) {
   const avatarState = useAvatarStore((s) => s.values)
   const setAnimationPlaying = useAvatarStore((s) => s.setAnimationPlaying)
   const isThinking = useAvatarStore((s) => s.isThinking)
+  const isAudioPlaying = useAvatarStore((s) => s.isAudioPlaying)
 
   const controllerRef = useRef<{
     playOneShot: (name: AnimationName) => void
@@ -293,12 +294,15 @@ export function useVRMAnimations(vrm: VRM) {
     }
   }, [actions, setAnimationPlaying])
 
-  // Backend-driven one-shots (talk / wave / etc. during replies).
+  // Backend-driven one-shots (talk / wave / etc. during replies). Fire when the
+  // streamed audio actually starts (isAudioPlaying), not when the reply text
+  // arrives, so the gesture stays in sync with the voice. `isThinking` keeps the
+  // think loop running in the gap between the two.
   useEffect(() => {
-    if (avatarState?.animation) {
+    if (isAudioPlaying && avatarState?.animation) {
       controllerRef.current?.playOneShot(avatarState.animation as AnimationName)
     }
-  }, [avatarState])
+  }, [isAudioPlaying, avatarState?.animation])
 
   // Loop the think animation while a reply is loading.
   useEffect(() => {
