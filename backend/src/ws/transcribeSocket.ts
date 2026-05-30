@@ -21,8 +21,20 @@ export function attachTranscribeSocket(server: Server): void {
   const wss = new WebSocketServer({
     server,
     path: "/api/transcribe",
-    verifyClient: ({ origin }, done) => {
-      if (origin && origin !== ALLOWED_ORIGIN) {
+    verifyClient: ({ origin, req }, done) => {
+      // Allow when the Origin matches the configured client origin OR when it's
+      // same-origin with this request (single-host deploy: the page and the WS
+      // share an origin, so a misconfigured CLIENT_ORIGIN must not silently
+      // break transcription). Same-origin is always safe — cross-origin WS
+      // hijacking is what the Origin check guards against.
+      const sameOrigin = (() => {
+        try {
+          return !!origin && new URL(origin).host === req.headers.host
+        } catch {
+          return false
+        }
+      })()
+      if (origin && origin !== ALLOWED_ORIGIN && !sameOrigin) {
         done(false, 403, "Forbidden origin")
         return
       }
